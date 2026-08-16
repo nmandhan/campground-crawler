@@ -66,24 +66,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WATCH-01 | TBD | Pending |
-| WATCH-02 | TBD | Pending |
-| POLL-01 | TBD | Pending |
-| POLL-02 | TBD | Pending |
-| POLL-03 | TBD | Pending |
-| POLL-04 | TBD | Pending |
-| NOTF-01 | TBD | Pending |
-| NOTF-02 | TBD | Pending |
-| NOTF-03 | TBD | Pending |
-| OPS-01 | TBD | Pending |
-| OPS-02 | TBD | Pending |
-| OPS-03 | TBD | Pending |
+| WATCH-01 | Phase 1 | Pending |
+| WATCH-02 | Phase 1 | Pending |
+| POLL-01 | Phase 1 | Pending |
+| POLL-02 | Phase 1 | Pending |
+| POLL-03 | Phase 1 | Pending |
+| POLL-04 | Phase 1 | Pending |
+| NOTF-01 | Phase 2 | Pending |
+| NOTF-02 | Phase 2 | Pending |
+| NOTF-03 | Phase 2 | Pending |
+| OPS-01 | Phase 1 | Pending |
+| OPS-02 | Phase 2 | Pending |
+| OPS-03 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 12 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 12 ⚠️ (will be resolved by roadmapper)
+- Mapped to phases: 12 (Phase 1: 7, Phase 2: 5)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-16*
-*Last updated: 2026-08-16 after initial definition*
+*Last updated: 2026-08-16 after roadmap creation (ROADMAP.md)*
