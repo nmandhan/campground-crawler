@@ -1,6 +1,6 @@
 /** Pure contiguous-range, site-type-filtered matcher (D-03/D-04).
  *
- *  No I/O, no imports from `src/recreation-gov/` or `src/state/` — this module
+ *  No I/O, no imports from the API adapter module or `src/state/` — this module
  *  consumes AvailabilitySlot[] already produced by the API adapter and decides
  *  whether a campsite satisfies a watch's ENTIRE date range as one continuous
  *  bookable stay (D-03) — NOT whether any single night in the range is open.
