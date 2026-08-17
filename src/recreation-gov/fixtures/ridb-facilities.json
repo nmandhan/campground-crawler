@@ -1,0 +1,24 @@
+{
+  "RECDATA": [
+    {
+      "FacilityID": 232447,
+      "FacilityName": "UPPER PINES",
+      "FacilityTypeDescription": "Campground",
+      "Reservable": true,
+      "Enabled": true
+    },
+    {
+      "FacilityID": 232448,
+      "FacilityName": "UPPER PINES GROUP SITES",
+      "FacilityTypeDescription": "Campground",
+      "Reservable": true,
+      "Enabled": true
+    }
+  ],
+  "METADATA": {
+    "RESULTS": {
+      "CURRENT_COUNT": 2,
+      "TOTAL_COUNT": 2
+    }
+  }
+}
