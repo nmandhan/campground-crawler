@@ -142,7 +142,12 @@ test('fetchMonthAvailability: returns the zod-parsed body', async () => {
   };
   const { fetchImpl } = makeFetchImpl([jsonResponse(body)]);
   const result = await fetchMonthAvailability(232447, '2026-09-01', { fetchImpl, sleep: async () => {} });
-  assert.deepEqual(result, body);
+  // AvailabilityResponseSchema fills in campsite_type's zod .default('') —
+  // assert on the fields that came from the raw body, not strict equality.
+  assert.deepEqual(
+    result.campsites['1']!.availabilities,
+    body.campsites['1'].availabilities
+  );
 });
 
 test('fetchMonthAvailability: throws ResponseSchemaError when AvailabilityResponseSchema fails', async () => {
@@ -194,7 +199,9 @@ test('fetchAvailabilityForRange: returns all responses in month order', async ()
     fetchImpl,
     sleep: async () => {},
   });
-  assert.deepEqual(result, [bodyA, bodyB]);
+  assert.equal(result.length, 2);
+  assert.deepEqual(Object.keys(result[0]!.campsites), ['a']);
+  assert.deepEqual(Object.keys(result[1]!.campsites), ['b']);
 });
 
 // ---------- fixture schema validation ----------
