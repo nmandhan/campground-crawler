@@ -29,8 +29,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Dedup/notification state is written to durable storage (e.g. a JSON file) after each run and correctly reloaded on the next run, so a restart doesn't lose track of what's already been seen.
 **Plans**: 4 plans (3 waves)
 - [x] 01-01-PLAN.md — Project scaffold + shared contracts (types, errors, zod schemas, StateStore interface)
-- [ ] 01-02-PLAN.md — Recreation.gov adapter: RIDB resolution, availability fetch, retry/backoff, normalization
-- [ ] 01-03-PLAN.md — Contiguous-range matcher + durable file-backed dedup state store
+- [x] 01-02-PLAN.md — Recreation.gov adapter: RIDB resolution, availability fetch, retry/backoff, normalization
+- [x] 01-03-PLAN.md — Contiguous-range matcher + durable file-backed dedup state store
 - [ ] 01-04-PLAN.md — Config loader, run() orchestrator, CLI (one-shot + --loop), end-to-end verification
 
 ### Phase 2: Notification Delivery & Deployment
