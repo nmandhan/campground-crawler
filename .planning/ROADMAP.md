@@ -27,7 +27,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The poller can execute on a recurring interval unattended (e.g. a local scheduler loop or repeated invocation) without manual triggering, checking all configured watches each cycle.
   4. When Recreation.gov's API errors or rate-limits a request, the poller retries with backoff and records the cycle as "check failed" rather than crashing or silently reporting no availability.
   5. Dedup/notification state is written to durable storage (e.g. a JSON file) after each run and correctly reloaded on the next run, so a restart doesn't lose track of what's already been seen.
-**Plans**: TBD
+**Plans**: 4 plans (3 waves)
+- [ ] 01-01-PLAN.md — Project scaffold + shared contracts (types, errors, zod schemas, StateStore interface)
+- [ ] 01-02-PLAN.md — Recreation.gov adapter: RIDB resolution, availability fetch, retry/backoff, normalization
+- [ ] 01-03-PLAN.md — Contiguous-range matcher + durable file-backed dedup state store
+- [ ] 01-04-PLAN.md — Config loader, run() orchestrator, CLI (one-shot + --loop), end-to-end verification
 
 ### Phase 2: Notification Delivery & Deployment
 **Goal**: The proven polling engine runs unattended in production and emails the user, with credentials handled securely, whenever a watch finds a genuinely new opening.
@@ -48,5 +52,5 @@ Phases execute in numeric order: 1 → 2
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Polling Engine | 0/TBD | Not started | - |
+| 1. Core Polling Engine | 0/4 | Planned | - |
 | 2. Notification Delivery & Deployment | 0/TBD | Not started | - |
