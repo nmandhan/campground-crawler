@@ -1,0 +1,14 @@
+[
+  {
+    "id": "upper-pines-labor-day",
+    "parkName": "Upper Pines Campground",
+    "dateRange": { "start": "2026-09-04", "end": "2026-09-07" },
+    "siteType": "tent"
+  },
+  {
+    "id": "kirk-creek-october",
+    "parkName": "Kirk Creek Campground",
+    "dateRange": { "start": "2026-10-09", "end": "2026-10-11" },
+    "siteType": "any"
+  }
+]
