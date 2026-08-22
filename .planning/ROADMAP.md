@@ -43,7 +43,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. If the same site remains open across multiple poll cycles, the user receives only one notification for that new-availability transition — no repeat/spam alerts.
   4. The system runs on a hosted schedule (e.g. GitHub Actions cron) without the user manually invoking it, and keeps polling across scheduled runs indefinitely.
   5. API keys and email service credentials are stored as encrypted secrets in the deployment platform, never committed to the repo.
-**Plans**: TBD
+**Plans**: 4 plans (3 waves)
+- [ ] 02-01-PLAN.md — Notification module: resend dependency, digest subject/body formatters, injectable sendDigestEmail
+- [ ] 02-02-PLAN.md — Wire RunDeps.sendNotification into run(), one digest per cycle over post-dedup newMatches
+- [ ] 02-03-PLAN.md — Scheduled GitHub Actions workflow, un-ignored + seeded state.json commit-back, env/secrets docs
+- [ ] 02-04-PLAN.md — Secret audit, Resend/GitHub secret provisioning, live smoke test (checkpoints)
 
 ## Progress
 
@@ -52,5 +56,5 @@ Phases execute in numeric order: 1 → 2
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Polling Engine | 0/4 | Planned | - |
-| 2. Notification Delivery & Deployment | 0/TBD | Not started | - |
+| 1. Core Polling Engine | 4/4 | Complete | 2026-08-22 |
+| 2. Notification Delivery & Deployment | 0/4 | Planned | - |
