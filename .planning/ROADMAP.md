@@ -12,7 +12,7 @@ Campground Crawler ships in two coherent phases. Phase 1 builds and proves the c
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Core Polling Engine** - Config-driven watches, live Recreation.gov matching, and durable dedup state, fully testable offline via CLI + fixtures
+- [x] **Phase 1: Core Polling Engine** - Config-driven watches, live Recreation.gov matching, and durable dedup state, fully testable offline via CLI + fixtures
 - [ ] **Phase 2: Notification Delivery & Deployment** - Real email alerts and unattended scheduled deployment with secured credentials
 
 ## Phase Details
@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 01-01-PLAN.md — Project scaffold + shared contracts (types, errors, zod schemas, StateStore interface)
 - [x] 01-02-PLAN.md — Recreation.gov adapter: RIDB resolution, availability fetch, retry/backoff, normalization
 - [x] 01-03-PLAN.md — Contiguous-range matcher + durable file-backed dedup state store
-- [ ] 01-04-PLAN.md — Config loader, run() orchestrator, CLI (one-shot + --loop), end-to-end verification
+- [x] 01-04-PLAN.md — Config loader, run() orchestrator, CLI (one-shot + --loop), end-to-end verification
 
 ### Phase 2: Notification Delivery & Deployment
 **Goal**: The proven polling engine runs unattended in production and emails the user, with credentials handled securely, whenever a watch finds a genuinely new opening.
