@@ -9,15 +9,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Watch Configuration
 
-- [ ] **WATCH-01**: User can define one or more watches via config file/env vars, each specifying a park/campground, date range, and site type
-- [ ] **WATCH-02**: Multiple concurrent watches are supported without cross-contamination (one watch's alert state never suppresses another watch's legitimate match)
+- [x] **WATCH-01**: User can define one or more watches via config file/env vars, each specifying a park/campground, date range, and site type
+- [x] **WATCH-02**: Multiple concurrent watches are supported without cross-contamination (one watch's alert state never suppresses another watch's legitimate match)
 
 ### Availability Polling
 
-- [ ] **POLL-01**: System checks Recreation.gov live availability for all configured watches on a recurring, unattended schedule (target: every few minutes)
-- [ ] **POLL-02**: System resolves campground/facility metadata via the RIDB API and live per-day availability via Recreation.gov's availability endpoint
-- [ ] **POLL-03**: System handles API errors and rate limits gracefully (retry/backoff) without crashing the schedule or going silently dark
-- [ ] **POLL-04**: System distinguishes "checked, no match" from "check failed" so failures don't get mistaken for absence of availability (and vice versa)
+- [x] **POLL-01**: System checks Recreation.gov live availability for all configured watches on a recurring, unattended schedule (target: every few minutes)
+- [x] **POLL-02**: System resolves campground/facility metadata via the RIDB API and live per-day availability via Recreation.gov's availability endpoint
+- [x] **POLL-03**: System handles API errors and rate limits gracefully (retry/backoff) without crashing the schedule or going silently dark
+- [x] **POLL-04**: System distinguishes "checked, no match" from "check failed" so failures don't get mistaken for absence of availability (and vice versa)
 
 ### Notifications
 
@@ -27,7 +27,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Reliability & Operations
 
-- [ ] **OPS-01**: Dedup/notification state persists durably between scheduled runs (survives ephemeral execution environments)
+- [x] **OPS-01**: Dedup/notification state persists durably between scheduled runs (survives ephemeral execution environments)
 - [ ] **OPS-02**: System runs unattended on a schedule without the user manually triggering checks
 - [ ] **OPS-03**: API keys and email service credentials are stored as secrets, not committed to the repo
 

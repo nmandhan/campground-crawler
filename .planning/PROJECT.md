@@ -12,15 +12,16 @@ When a watched campsite becomes available on Recreation.gov, the user gets an em
 
 ### Validated
 
-(None yet — ship to validate)
+Validated in Phase 1 (Core Polling Engine), live-verified against Recreation.gov:
+
+- [x] User can define one or more "watches" via a config file/env vars, each specifying a park/campground, date range, and site type
+- [x] System checks Recreation.gov availability for all configured watches on a recurring schedule (every few minutes) — `--loop --interval N` (N ≥ 60s)
+- [x] System avoids duplicate/spammy alerts for the same still-open availability — durable dedup state proven end-to-end (new match → persisted → suppressed on next run)
 
 ### Active
 
-- [ ] User can define one or more "watches" via a config file/env vars, each specifying a park/campground, date range, and site type
-- [ ] System checks Recreation.gov availability for all configured watches on a recurring schedule (every few minutes)
-- [ ] User receives an email when a watch finds a newly available matching site
-- [ ] System avoids duplicate/spammy alerts for the same still-open availability (only alert on new openings, or at a sane re-notify cadence)
-- [ ] System runs unattended on a schedule without the user manually triggering checks
+- [ ] User receives an email when a watch finds a newly available matching site (Phase 2)
+- [ ] System runs unattended on a schedule without the user manually triggering checks (Phase 2 — deployment)
 
 ### Out of Scope
 
@@ -69,4 +70,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-16 after initialization*
+*Last updated: 2026-08-22 after Phase 1 (Core Polling Engine) completion*
