@@ -2,6 +2,7 @@
   {
     "id": "upper-pines-labor-day",
     "parkName": "Upper Pines Campground",
+    "facilityId": 232447,
     "dateRange": { "start": "2026-09-04", "end": "2026-09-07" },
     "siteType": "tent"
   },
