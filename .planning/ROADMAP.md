@@ -14,6 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Core Polling Engine** - Config-driven watches, live Recreation.gov matching, and durable dedup state, fully testable offline via CLI + fixtures
 - [ ] **Phase 2: Notification Delivery & Deployment** - Real email alerts and unattended scheduled deployment with secured credentials
+- [ ] **Phase 3: Status Dashboard** - Vercel-hosted page showing recent poll results and watch state, as a near-term substitute for email alerts until a domain is verified with Resend
 
 ## Phase Details
 
@@ -44,17 +45,27 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. The system runs on a hosted schedule (e.g. GitHub Actions cron) without the user manually invoking it, and keeps polling across scheduled runs indefinitely.
   5. API keys and email service credentials are stored as encrypted secrets in the deployment platform, never committed to the repo.
 **Plans**: 4 plans (3 waves)
-- [ ] 02-01-PLAN.md — Notification module: resend dependency, digest subject/body formatters, injectable sendDigestEmail
-- [ ] 02-02-PLAN.md — Wire RunDeps.sendNotification into run(), one digest per cycle over post-dedup newMatches
-- [ ] 02-03-PLAN.md — Scheduled GitHub Actions workflow, un-ignored + seeded state.json commit-back, env/secrets docs
-- [ ] 02-04-PLAN.md — Secret audit, Resend/GitHub secret provisioning, live smoke test (checkpoints)
+- [x] 02-01-PLAN.md — Notification module: resend dependency, digest subject/body formatters, injectable sendDigestEmail
+- [x] 02-02-PLAN.md — Wire RunDeps.sendNotification into run(), one digest per cycle over post-dedup newMatches
+- [x] 02-03-PLAN.md — Scheduled GitHub Actions workflow, un-ignored + seeded state.json commit-back, env/secrets docs
+- [ ] 02-04-PLAN.md — Secret audit, Resend/GitHub secret provisioning, live smoke test (checkpoints) — **paused at Task 3**: real email delivery blocked on Resend domain verification (no `onboarding@resend.dev` shared-domain access on this account); repo is public, secrets are provisioned, match/dedup/commit-back all verified live
+
+### Phase 3: Status Dashboard
+**Goal**: A hosted status page shows recent poll results and watch state, giving visibility into the poller without requiring email — a near-term substitute until a domain is verified with Resend for real alert delivery.
+**Depends on**: Phase 2
+**Requirements**: TBD (to be broken down in planning)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 3 to break down)
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2
+Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Core Polling Engine | 4/4 | Complete | 2026-08-22 |
-| 2. Notification Delivery & Deployment | 0/4 | Planned | - |
+| 2. Notification Delivery & Deployment | 3/4 | Paused (checkpoint) | - |
+| 3. Status Dashboard | 0/0 | Planned | - |
