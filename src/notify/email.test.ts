@@ -139,8 +139,8 @@ test('sendDigestEmail: resend API error -> resolves, logs error', async () => {
   const { sendImpl } = recordingSend({ error: { name: 'validation_error', message: 'bad from' } });
   await sendDigestEmail([matched()], { apiKey: 're_test_supersecret', to: 'user@example.test', logger, sendImpl });
   assert.equal(lines.length, 1);
-  assert.ok(lines[0].includes('email send failed'));
-  assert.ok(lines[0].includes('validation_error'));
+  assert.ok(lines[0]?.includes('email send failed'));
+  assert.ok(lines[0]?.includes('validation_error'));
 });
 
 test('sendDigestEmail: sendImpl throws -> resolves, logs error', async () => {
@@ -150,7 +150,7 @@ test('sendDigestEmail: sendImpl throws -> resolves, logs error', async () => {
   };
   await sendDigestEmail([matched()], { apiKey: 're_test_supersecret', to: 'user@example.test', logger, sendImpl });
   assert.equal(lines.length, 1);
-  assert.ok(lines[0].includes('email send failed'));
+  assert.ok(lines[0]?.includes('email send failed'));
 });
 
 test('sendDigestEmail: missing apiKey -> sendImpl not called, logs RESEND_API_KEY error', async () => {

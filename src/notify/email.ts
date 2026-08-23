@@ -7,6 +7,7 @@
  */
 import { Resend } from 'resend';
 import type { MatchedSlot } from '../types.js';
+import { describeFailure } from '../errors.js';
 
 const MAX_FIELD_LENGTH = 200;
 
@@ -69,4 +70,68 @@ export function buildBody(matches: MatchedSlot[]): string {
   const header = `${count} new ${noun} available.`;
   const footer = 'Dates are nights; the checkout date is not a night. Book at the link above.';
   return [header, ...groupBlocks, footer].join('\n\n');
+}
+
+export const DEFAULT_FROM = 'Campground Crawler <onboarding@resend.dev>';
+
+export interface EmailLogger {
+  info(msg: string): void;
+  error(msg: string): void;
+}
+
+export interface EmailPayload {
+  from: string;
+  to: string[];
+  subject: string;
+  text: string;
+}
+
+export interface SendResult {
+  error: { name: string; message: string } | null;
+}
+
+export interface SendDigestOptions {
+  apiKey?: string; // default: process.env.RESEND_API_KEY
+  to?: string; // default: process.env.NOTIFY_EMAIL
+  from?: string; // default: process.env.NOTIFY_FROM ?? DEFAULT_FROM
+  logger?: EmailLogger; // default: console
+  sendImpl?: (payload: EmailPayload) => Promise<SendResult>; // default: real Resend call
+}
+
+export async function sendDigestEmail(matches: MatchedSlot[], opts?: SendDigestOptions): Promise<void> {
+  if (matches.length === 0) return;
+
+  const logger = opts?.logger ?? console;
+
+  const apiKey = opts?.apiKey ?? process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    logger.error('email not sent: RESEND_API_KEY is not set');
+    return;
+  }
+
+  const to = opts?.to ?? process.env.NOTIFY_EMAIL;
+  if (!to) {
+    logger.error('email not sent: NOTIFY_EMAIL is not set');
+    return;
+  }
+
+  const from = opts?.from ?? process.env.NOTIFY_FROM ?? DEFAULT_FROM;
+
+  const sendImpl =
+    opts?.sendImpl ??
+    ((payload: EmailPayload) => new Resend(apiKey).emails.send(payload) as Promise<SendResult>);
+
+  const payload: EmailPayload = { from, to: [to], subject: buildSubject(matches), text: buildBody(matches) };
+
+  try {
+    const { error } = await sendImpl(payload);
+    if (error) {
+      logger.error(`email send failed: ${error.name}: ${error.message}`);
+      return;
+    }
+  } catch (err) {
+    logger.error(`email send failed: ${describeFailure(err)}`);
+    return;
+  }
+  logger.info(`email sent: ${matches.length} new match${matches.length === 1 ? '' : 'es'}`);
 }
