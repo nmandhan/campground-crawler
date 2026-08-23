@@ -1,0 +1,57 @@
+name: Poll campsite availability
+
+# D-08: 5-minute cadence. GitHub's scheduler is best-effort and may skew or skip
+# runs under load — that is acceptable here; dedup state makes a skipped cycle
+# harmless and a doubled cycle idempotent.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+# D-10: queue overlapping runs, never cancel one mid-flight. A cancelled run could
+# be interrupted between the email send and the state commit, producing a duplicate
+# alert next cycle. Do NOT change this to `true`.
+concurrency:
+  group: poller
+  cancel-in-progress: false
+
+# Least privilege: only what the state commit-back push needs. Public repos default
+# GITHUB_TOKEN to read-only for contents, which would make the push fail with 403.
+permissions:
+  contents: write
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run poller
+        id: poll
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          NOTIFY_FROM: ${{ secrets.NOTIFY_FROM }}
+          RIDB_API_KEY: ${{ secrets.RIDB_API_KEY }}
+        run: npm start
+
+      - name: Commit dedup state if it changed
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain -- state.json)" ]; then
+            echo "state.json unchanged — skipping commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state.json
+          git commit -m "chore: update dedup state [skip ci]"
+          git push
