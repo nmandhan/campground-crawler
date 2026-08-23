@@ -332,12 +332,17 @@ test('two watches yielding 3 brand-new matches: notifier called exactly once wit
   const deps: RunDeps = {
     loadResolved: loadResolvedOf([w1, w2]),
     fetchRange: async (facilityId) => {
+      const nights = {
+        '2026-09-04T00:00:00Z': 'Available',
+        '2026-09-05T00:00:00Z': 'Available',
+        '2026-09-06T00:00:00Z': 'Available',
+      } as const;
       if (facilityId === 11) {
         return [
           {
             campsites: {
-              'a1': { availabilities: { '2026-09-04T00:00:00Z': 'Available' }, campsite_type: 'STANDARD NONELECTRIC', loop: 'A', site: '001' },
-              'a2': { availabilities: { '2026-09-04T00:00:00Z': 'Available' }, campsite_type: 'STANDARD NONELECTRIC', loop: 'A', site: '002' },
+              'a1': { availabilities: { ...nights }, campsite_type: 'STANDARD NONELECTRIC', loop: 'A', site: '001' },
+              'a2': { availabilities: { ...nights }, campsite_type: 'STANDARD NONELECTRIC', loop: 'A', site: '002' },
             },
           },
         ];
@@ -393,14 +398,11 @@ test('1 new + 1 suppressed match: notifier called once with only the new match',
   const notifier = recordingNotifier();
   const deps: RunDeps = {
     loadResolved: loadResolvedOf([watch('w1')]),
-    fetchRange: async () => [
-      {
-        campsites: {
-          'site-1': { availabilities: { '2026-09-04T00:00:00Z': 'Available' }, campsite_type: 'STANDARD NONELECTRIC', loop: 'A', site: '001' },
-          'site-2': { availabilities: { '2026-09-04T00:00:00Z': 'Available' }, campsite_type: 'STANDARD NONELECTRIC', loop: 'A', site: '002' },
-        },
-      },
-    ],
+    fetchRange: async () => {
+      const a = fullyAvailableResponse('site-1', '001');
+      const b = fullyAvailableResponse('site-2', '002');
+      return [{ campsites: { ...a.campsites, ...b.campsites } }];
+    },
     store,
     logger: recordingLogger().logger,
     sendNotification: notifier.sendNotification,
