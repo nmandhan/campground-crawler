@@ -11,6 +11,7 @@ import { dedupKey, type StateStore } from './state/store.js';
 import { FileStateStore } from './state/fileStore.js';
 import { describeFailure } from './errors.js';
 import { nightsInRange } from './matcher/dates.js';
+import { sendDigestEmail } from './notify/email.js';
 import type { RunSummary, WatchOutcome, MatchedSlot } from './types.js';
 
 export interface RunLogger {
@@ -29,6 +30,10 @@ export interface RunDeps {
   store?: StateStore;
   logger?: RunLogger;
   now?: () => Date;
+  /** Called at most once per cycle with the post-dedup new matches (NOTF-01/D-04:
+   *  one digest per cycle, never one email per site). Injectable so tests never
+   *  touch the network. */
+  sendNotification?: (matches: MatchedSlot[]) => Promise<void>;
 }
 
 export async function run(deps?: RunDeps): Promise<RunSummary> {
@@ -37,6 +42,8 @@ export async function run(deps?: RunDeps): Promise<RunSummary> {
   const store = deps?.store ?? new FileStateStore();
   const logger = deps?.logger ?? console;
   const now = deps?.now ?? (() => new Date());
+  const sendNotification =
+    deps?.sendNotification ?? ((matches: MatchedSlot[]) => sendDigestEmail(matches, { logger }));
 
   const startedAt = now().toISOString();
 
@@ -101,6 +108,17 @@ export async function run(deps?: RunDeps): Promise<RunSummary> {
   const newMatches = outcomes
     .filter((o): o is Extract<WatchOutcome, { status: 'MATCH' }> => o.status === 'MATCH')
     .flatMap((o) => o.newMatches);
+
+  if (newMatches.length > 0) {
+    try {
+      await sendNotification(newMatches);
+    } catch (err) {
+      // D-11/D-12: a notification failure is NOT a watch failure. It must never enter
+      // RunSummary.failed, never change cli.ts's exit code, and never abort the cycle.
+      logger.error(`notification failed: ${describeFailure(err)}`);
+    }
+  }
+
   const failed = outcomes
     .filter((o): o is Extract<WatchOutcome, { status: 'FAILED' }> => o.status === 'FAILED')
     .map((o) => ({ watchId: o.watchId, reason: o.reason }));
