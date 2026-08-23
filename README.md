@@ -45,10 +45,17 @@ npm start -- --loop --interval 300
 getting the process's IP or RIDB key rate-limited/blocked by the undocumented
 Recreation.gov availability endpoint.
 
-## Optional: `RIDB_API_KEY`
+## Environment variables
 
-Set the `RIDB_API_KEY` environment variable to raise RIDB's rate limits for
-facility-name resolution. Not required to run the tool.
+See `.env.example` for the file to copy locally. In production these are set
+as GitHub repo Secrets (see "Scheduled deployment" below).
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `RESEND_API_KEY` | Required | Email delivery. Create at https://resend.com/api-keys. Use a SEND-ONLY restricted key, not a full-access key. |
+| `NOTIFY_EMAIL` | Required | Where alerts are delivered. |
+| `NOTIFY_FROM` | Optional | Sender address. Defaults to `Campground Crawler <onboarding@resend.dev>`, Resend's shared TEST domain — alerts may land in spam. Set this to an address on a domain you have verified with Resend for reliable delivery. |
+| `RIDB_API_KEY` | Optional | Raises RIDB rate limits AND is required for park-name -> facilityId resolution (RIDB returns HTTP 401 without it). Not needed if every watch in `watches.json` sets an explicit `facilityId`. Register at https://www.recreation.gov/manage-account/developer-api. |
 
 ## Output
 
@@ -70,8 +77,29 @@ Dedup/notification state lives in `state.json` in the project root. It tracks
 which openings have already been reported so the same opening isn't reported
 as "new" on every cycle. Deleting `state.json` resets this — every
 currently-open matching site will be reported as new again on the next run.
+In the deployed setup, resetting means committing an empty
+`{"version":1,"entries":{}}` and pushing.
 
-## What's not here yet
+## Scheduled deployment (GitHub Actions)
 
-Phase 1 is console output only. Email delivery and scheduled/unattended
-deployment (e.g. via GitHub Actions) arrive in Phase 2.
+`.github/workflows/poll.yml` runs the poller every 5 minutes on GitHub's
+`schedule` trigger — no manual invocation needed once it's set up. The repo
+must be **public** for unlimited free Actions minutes at this cadence.
+
+Setup checklist:
+
+1. Create a Resend account and a send-only API key.
+2. Add `RESEND_API_KEY` and `NOTIFY_EMAIL` under repo Settings -> Secrets and
+   variables -> Actions -> New repository secret.
+3. Optionally add `NOTIFY_FROM` and `RIDB_API_KEY` the same way.
+4. Trigger a manual run from the Actions tab via "Run workflow"
+   (`workflow_dispatch`) to smoke-test before relying on the schedule.
+
+The workflow commits `state.json` back to the repo after any cycle that
+changed it — this is how dedup survives the ephemeral GitHub Actions runner.
+That means the commit history will contain campsite dedup keys (site IDs and
+dates), which is not sensitive.
+
+Secrets must never be pasted into `watches.json`, a workflow `run:` step, or
+a commit. GitHub redacts registered secret values from Actions logs, but only
+for values injected through the `secrets` context.
