@@ -103,3 +103,19 @@ dates), which is not sensitive.
 Secrets must never be pasted into `watches.json`, a workflow `run:` step, or
 a commit. GitHub redacts registered secret values from Actions logs, but only
 for values injected through the `secrets` context.
+
+## Repo layout (two projects)
+
+This repo contains two independent projects:
+
+- `src/` is the poller: Node 22 + `tsx`, no build step. Run `npm ci` / `npm start` / `npm test`
+  from the **repo root**.
+- `dashboard/` is the Next.js status dashboard, an independent project with its own
+  `package.json`, `package-lock.json`, `tsconfig.json` and `node_modules`. Always
+  `cd dashboard` before any `npm` command targeting it.
+
+Adding a dependency from the wrong working directory is the failure mode to watch for: if a
+root `npm ci` suddenly starts installing `next`/`react`, a dashboard dependency landed in the
+root `package.json`.
+
+Vercel deploys `dashboard/` only, via the project's **Root Directory** setting = `dashboard`.
