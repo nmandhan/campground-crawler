@@ -53,11 +53,15 @@ Decimal phases appear between their surrounding integers in numeric order.
 ### Phase 3: Status Dashboard
 **Goal**: A hosted status page shows recent poll results and watch state, giving visibility into the poller without requiring email — a near-term substitute until a domain is verified with Resend for real alert delivery.
 **Depends on**: Phase 2
-**Requirements**: TBD (to be broken down in planning)
-**Plans:** 0 plans
+**Requirements**: No formal REQ-IDs — scope is this goal plus 03-CONTEXT.md decisions D-01..D-08
+**Plans:** 5 plans (4 waves)
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 3 to break down)
+- [ ] 03-01-PLAN.md — Run-summary file writer, cli.ts wiring, workflow append-and-cap of a 50-entry runs.json (D-01, D-02)
+- [ ] 03-02-PLAN.md — dashboard/ Next.js scaffold, local types, GitHub raw fetch helper, zod validation (D-03, D-08)
+- [ ] 03-03-PLAN.md — Pure derivations: active matches, per-watch status, run timeline, time/date formatting (D-05, D-06, D-07)
+- [ ] 03-04-PLAN.md — UI-SPEC design tokens, copy constants, view-model assembly, App Router page rendering the three sections (D-04..D-08)
+- [ ] 03-05-PLAN.md — Vercel deploy (Root Directory = dashboard), live verification, README URL record (D-03, D-04, D-08)
 
 ## Progress
 
@@ -68,4 +72,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Core Polling Engine | 4/4 | Complete | 2026-08-22 |
 | 2. Notification Delivery & Deployment | 3/4 | Paused (checkpoint) | - |
-| 3. Status Dashboard | 0/0 | Planned | - |
+| 3. Status Dashboard | 0/5 | Planned | - |
