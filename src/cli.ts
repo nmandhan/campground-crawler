@@ -5,6 +5,7 @@
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { run } from './run.js';
+import { writeRunSummaryFile } from './runSummaryFile.js';
 
 const MIN_INTERVAL_SECONDS = 60;
 const DEFAULT_INTERVAL_SECONDS = 300;
@@ -32,6 +33,9 @@ function parseCliArgs(argv: string[]): { loop: boolean; intervalSeconds: number 
 
 async function runOnce(): Promise<number> {
   const summary = await run();
+  // D-01: in CI the workflow sets RUN_SUMMARY_FILE and appends this file to runs.json.
+  // Unset locally, so `npm start` writes nothing.
+  await writeRunSummaryFile(summary, process.env.RUN_SUMMARY_FILE);
   console.log(`checked ${summary.checked} — ${summary.newMatches.length} new matches, ${summary.failed.length} failed`);
   return summary.failed.length === 0 ? 0 : 1;
 }

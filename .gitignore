@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env
 state.json.tmp
+run-summary.json
+run-summary.json.tmp
+runs.json.tmp
+.next/
