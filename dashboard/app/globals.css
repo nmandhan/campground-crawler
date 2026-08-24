@@ -1,0 +1,141 @@
+/* Design tokens — 03-UI-SPEC.md. Values are the contract; do not invent new sizes/colors. */
+:root {
+  /* Spacing scale (multiples of 4) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* Typography — exactly 4 sizes, 2 weights */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --text-meta: 14px;
+  --text-body: 16px;
+  --text-heading: 20px;
+  --text-title: 28px;
+  --weight-regular: 400;
+  --weight-semibold: 600;
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+
+  /* Color — 60/30/10 split */
+  --color-bg: #FFFFFF;        /* dominant 60% */
+  --color-surface: #F1F3F5;   /* secondary 30% */
+  --color-border: #E2E5E9;
+  --color-accent: #2563EB;    /* 10% — booking links + heading text ONLY */
+  --color-destructive: #DC2626;
+
+  /* Foreground neutrals. UI-SPEC's palette table covers surfaces, not body text;
+     --color-text is a documented extension, --color-meta reuses the NO_MATCH gray. */
+  --color-text: #111827;
+  --color-meta: #6B7280;
+
+  /* Status badge colors */
+  --color-match: #16A34A;
+  --color-no-match: #6B7280;
+  --color-failed: #DC2626;
+}
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-normal);
+}
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--space-3xl) var(--space-lg);
+}
+
+.page-title {
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  color: var(--color-accent);
+  margin: 0;
+}
+
+.freshness {
+  font-size: var(--text-meta);
+  color: var(--color-meta);
+  margin: var(--space-sm) 0 0 0;
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);          /* gap between the three major sections */
+  margin-top: var(--space-2xl);  /* header -> first section */
+}
+
+.section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: var(--space-lg);
+}
+
+.section-heading {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  color: var(--color-accent);
+  margin: 0 0 var(--space-md) 0;
+}
+
+.rows { display: flex; flex-direction: column; gap: var(--space-sm); list-style: none; margin: 0; padding: 0; }
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+  border-top: 1px solid var(--color-border);
+}
+.row:first-child { border-top: none; }
+
+.row-main { font-size: var(--text-body); }
+.row-meta { font-size: var(--text-meta); color: var(--color-meta); }
+
+.badge {
+  display: inline-block;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: 4px;
+  font-size: var(--text-meta);
+  font-weight: var(--weight-semibold);
+  color: var(--color-bg);
+}
+.badge--match { background: var(--color-match); }
+.badge--no-match { background: var(--color-no-match); }
+.badge--failed { background: var(--color-failed); }
+.badge--unknown { background: var(--color-no-match); }
+
+.failure-reason { color: var(--color-destructive); font-size: var(--text-meta); }
+
+.booking-link { color: var(--color-accent); font-weight: var(--weight-semibold); }
+
+.empty-heading {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  margin: 0 0 var(--space-xs) 0;
+}
+.empty-body { font-size: var(--text-meta); color: var(--color-meta); margin: 0; }
+
+.error { border-color: var(--color-destructive); }
+.error-heading {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  color: var(--color-destructive);
+  margin: 0 0 var(--space-sm) 0;
+}
+.error-body { font-size: var(--text-body); margin: 0; }
