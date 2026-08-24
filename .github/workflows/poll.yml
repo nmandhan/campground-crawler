@@ -40,18 +40,46 @@ jobs:
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
           NOTIFY_FROM: ${{ secrets.NOTIFY_FROM }}
           RIDB_API_KEY: ${{ secrets.RIDB_API_KEY }}
+          RUN_SUMMARY_FILE: run-summary.json
         run: npm start
 
-      - name: Commit dedup state if it changed
+      # D-01/D-02: append this cycle's RunSummary to a rolling history log, capped at 50
+      # entries (~4h at the 5-minute cadence) so the committed file never grows unbounded.
+      - name: Append run to history log
         if: always()
         run: |
           set -euo pipefail
-          if [ -z "$(git status --porcelain -- state.json)" ]; then
-            echo "state.json unchanged — skipping commit"
+          # A fatal crash in the poller (e.g. invalid watches.json) means cli.ts never
+          # returned a summary to write. Synthesise a FAILED entry so this always-run step
+          # still produces an honest record and runs.json keeps a uniform RunSummary shape.
+          if [ ! -f run-summary.json ]; then
+            NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            REASON="poller exited without producing a run summary"
+            jq -n --arg now "$NOW" --arg reason "$REASON" '{
+              startedAt: $now,
+              finishedAt: $now,
+              checked: 0,
+              outcomes: [{ watchId: "(run)", status: "FAILED", reason: $reason }],
+              newMatches: [],
+              failed: [{ watchId: "(run)", reason: $reason }],
+              noMatch: []
+            }' > run-summary.json
+          fi
+          if [ ! -f runs.json ]; then echo '[]' > runs.json; fi
+          jq --slurpfile new run-summary.json '. + $new | .[-50:]' runs.json > runs.json.tmp
+          mv runs.json.tmp runs.json
+          echo "runs.json now has $(jq 'length' runs.json) entries"
+
+      - name: Commit dedup state and run history if changed
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain -- state.json runs.json)" ]; then
+            echo "No state changes — skipping commit"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state.json
-          git commit -m "chore: update dedup state [skip ci]"
+          git add state.json runs.json
+          git commit -m "chore: update dedup state and run history [skip ci]"
           git push
