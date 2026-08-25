@@ -28,8 +28,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Reliability & Operations
 
 - [x] **OPS-01**: Dedup/notification state persists durably between scheduled runs (survives ephemeral execution environments)
-- [ ] **OPS-02**: System runs unattended on a schedule without the user manually triggering checks
-- [ ] **OPS-03**: API keys and email service credentials are stored as secrets, not committed to the repo
+- [x] **OPS-02**: System runs unattended on a schedule without the user manually triggering checks
+- [x] **OPS-03**: API keys and email service credentials are stored as secrets, not committed to the repo
 
 ## v2 Requirements
 
@@ -66,18 +66,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WATCH-01 | Phase 1 | Pending |
-| WATCH-02 | Phase 1 | Pending |
-| POLL-01 | Phase 1 | Pending |
-| POLL-02 | Phase 1 | Pending |
-| POLL-03 | Phase 1 | Pending |
-| POLL-04 | Phase 1 | Pending |
-| NOTF-01 | Phase 2 | Pending |
-| NOTF-02 | Phase 2 | Pending |
-| NOTF-03 | Phase 2 | Pending |
-| OPS-01 | Phase 1 | Pending |
-| OPS-02 | Phase 2 | Pending |
-| OPS-03 | Phase 2 | Pending |
+| WATCH-01 | Phase 1 | Complete |
+| WATCH-02 | Phase 1 | Complete |
+| POLL-01 | Phase 1 | Complete |
+| POLL-02 | Phase 1 | Complete |
+| POLL-03 | Phase 1 | Complete |
+| POLL-04 | Phase 1 | Complete |
+| NOTF-01 | Phase 2 | Blocked (Resend domain verification) |
+| NOTF-02 | Phase 2 | Blocked (Resend domain verification) |
+| NOTF-03 | Phase 2 | Blocked (Resend domain verification) |
+| OPS-01 | Phase 1 | Complete |
+| OPS-02 | Phase 2 | Complete |
+| OPS-03 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 12 total
