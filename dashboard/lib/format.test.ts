@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatRelativeTime, formatAbsolute, formatDateRange } from './format';
+import { formatRelativeTime, formatAbsolute, formatDateRange, watchLabel } from './format';
+import type { Watch } from './types';
+
+const dateRange = { start: '2026-09-01', end: '2026-09-03' } as const;
 
 test('formatRelativeTime: 30 seconds ago', () => {
   assert.equal(
@@ -84,4 +87,42 @@ test('formatDateRange: single-night range uses singular "night"', () => {
 test('formatDateRange: end <= start returns "unknown dates"', () => {
   assert.equal(formatDateRange('2026-10-11', '2026-10-09'), 'unknown dates');
   assert.equal(formatDateRange('2026-10-09', '2026-10-09'), 'unknown dates');
+});
+
+test('watchLabel: a facility watch returns its parkName', () => {
+  const watch: Watch = {
+    type: 'facility',
+    id: 'a',
+    parkName: 'Kirk Creek Campground',
+    dateRange,
+    siteType: 'tent',
+  };
+  assert.equal(watchLabel(watch), 'Kirk Creek Campground');
+});
+
+test('watchLabel: a single-area watch returns its area name with "(area)" suffix', () => {
+  const watch: Watch = {
+    type: 'area',
+    id: 'a',
+    areas: [{ name: 'Sequoia National Forest' }],
+    dateRange,
+    siteType: 'tent',
+  };
+  assert.equal(watchLabel(watch), 'Sequoia National Forest (area)');
+});
+
+test('watchLabel: a multi-area watch joins names with " + "', () => {
+  const watch: Watch = {
+    type: 'area',
+    id: 'a',
+    areas: [{ name: 'Sequoia National Forest' }, { name: 'Sierra National Forest' }],
+    dateRange,
+    siteType: 'tent',
+  };
+  assert.equal(watchLabel(watch), 'Sequoia National Forest + Sierra National Forest (area)');
+});
+
+test('watchLabel: an area watch with no areas returns a non-empty placeholder', () => {
+  const watch: Watch = { type: 'area', id: 'a', areas: [], dateRange, siteType: 'tent' };
+  assert.equal(watchLabel(watch), '(area, none listed)');
 });
