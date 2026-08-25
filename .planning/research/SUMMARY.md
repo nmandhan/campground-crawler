@@ -1,143 +1,135 @@
 # Project Research Summary
 
-**Project:** Campground Crawler
-**Domain:** Scheduled polling + transactional email notification service (single-user Recreation.gov campsite availability watcher)
-**Researched:** 2026-08-16
+**Project:** Campground Crawler v1.1 — Area-Based Search + Watch-Management UI
+**Domain:** Extending a zero-database, git-as-datastore campsite availability watcher with (1) region/area search and (2) a self-service write path for watch configuration
+**Researched:** 2026-08-25
 **Confidence:** MEDIUM-HIGH
 
 ## Executive Summary
 
-This is a well-trodden category of tool — "poll a third-party API on a schedule, diff against previous state, notify on new matches" — exemplified by commercial products (Campnab, Campsite Notifier) and mature open-source tools (`camply`, `banool/recreation-gov-campsite-checker`, `recbot`). All of them converge on the same shape: a config-driven list of watches, an unattended scheduler, a thin API client, a pure matcher, one durable piece of state (dedup tracking), and a notification sender. Nothing about this project requires novel architecture — the job is executing the boring, well-understood pattern correctly, with special care around two things the research consistently flags as make-or-break: (1) using the right Recreation.gov endpoint, and (2) never losing dedup state between runs.
+This milestone adds two related but architecturally independent capabilities to an already-shipped, working v1.0 system: area-based campground search (watch "Yosemite," not just one pinned campground) and a dashboard UI that can create/edit/delete watches instead of requiring hand-edited `watches.json`. Both extend the existing two-project shape (`src/` poller on GitHub Actions cron, `dashboard/` read-only Next.js app on Vercel) rather than requiring any new runtime, database, or hosting platform — research across all four tracks converges on the same conclusion: resist the urge to add infrastructure (no database, no auth framework, no map library, no GitHub App). The right approach is a discriminated-union `Watch` type (`facility` | `area`), resolved to concrete facility IDs at poll time (not frozen at watch-creation time), and a new GitHub Contents API write path from Next.js Route Handlers, gated by a minimal shared secret rather than full authentication.
 
-The recommended approach: TypeScript run via `tsx` on a **GitHub Actions scheduled workflow** (not Vercel Cron — Vercel's free Hobby tier caps cron at once/day, which fails the "every few minutes" requirement outright; GitHub Actions supports 5-minute granularity for free). Use the official, documented **RIDB API** only to resolve park/campground names to IDs; use the **undocumented** `www.recreation.gov/api/camps/availability/campground/{id}/month` JSON endpoint (the same one every community tool relies on) for actual live availability — RIDB does not expose this. Persist "already notified" dedup state by committing a small JSON file back to the repo after each run (zero extra infrastructure, git-history-auditable, works within GitHub Actions' free tier). Send email via **Resend** with a verified custom sending domain (SPF/DKIM) to avoid spam-folder placement, which would silently defeat the entire "fast enough to book it" value proposition.
+The single most important architectural fact discovered is that v1.0's git-as-datastore design relies on a strict single-writer-per-file invariant (GitHub Actions writes `state.json`/`runs.json`; nothing writes `watches.json` today) — this invariant is what makes the no-database design safe without locking, and it must be deliberately preserved, not accidentally broken, as the dashboard becomes `watches.json`'s first writer. The research also surfaces two closely linked risks that must be designed in from the start rather than patched later: (1) area search can silently multiply availability-endpoint request volume 20-50x per watch, threatening both the courtesy ~1 req/sec convention and RIDB's actual enforced 50 req/min limit, and (2) area search reintroduces v1.0's known facility-name-mismatch bug (the "BANDIDO" incident) at a scale where it's no longer visually obvious, because a geo query returns campgrounds mixed with non-campground facility types.
 
-The key risks, per the research, are not exotic: (1) conflating "API call failed" with "no availability found," which causes either silent multi-day outages or error-spam; (2) shipping without persisted dedup state, causing duplicate-email spam for every poll cycle a site stays open; (3) relying on an unofficial endpoint that could change without notice, mitigated by isolating it behind a single adapter module; and (4) over-aggressive polling triggering Recreation.gov's informal anti-bot throttling. All four are addressable with disciplined Phase 1 architecture (typed error/no-match/match state, an adapter boundary around the availability fetch, and a bounded-concurrency rate limiter) rather than needing new tooling.
+Recommended sequencing is two independent phases, area-search logic first (pure `src/` changes, no new I/O/auth surface, ships value via hand-edited JSON immediately) then the watch-management write UI second (first time the dashboard gains a mutation/auth surface, and it should target the already-finalized `Watch` type rather than being built and reworked). Confidence is MEDIUM-HIGH overall: the codebase facts and existing conventions are HIGH confidence (read directly from source), while exact RIDB geo-search query parameter names and RIDB facility-type filtering fields are MEDIUM confidence, corroborated by multiple independent community sources but not re-verified against a live authenticated response or the official Swagger doc in this research pass — flagged for verification early in implementation via a live fixture capture.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Node.js 22 LTS + TypeScript 5.7+ run via `tsx` (no build step) is the right fit for a small, single-purpose script executed by GitHub Actions. `zod` should validate both the watch config and the (unofficial, drift-prone) availability API responses at runtime — this is the single highest-leverage dependency given how easily upstream API shape changes or config typos cause silent failures. Resend is the clear choice for transactional email: generous free tier (3,000/mo, 100/day — vastly more than needed), official typed SDK, and far better DX than Amazon SES or SendGrid for this scale. `p-limit` and `date-fns` are useful supporting libraries once watch count or date-range complexity grows, but not required for a minimal v1.
+No new runtime, database, or hosting platform is needed. Area search extends the existing RIDB `/facilities` client with geo/state query params (same auth, same response envelope). The watch-management write path uses the GitHub REST Contents API (`GET`/`PUT .../contents/watches.json`) called via plain `fetch` from new Next.js Route Handlers, authenticated with a fine-grained, repo-scoped PAT stored server-side — matching the project's existing "hand-roll fetch, no SDK" convention. The write UI itself is gated with Next.js Middleware + a lightweight shared secret (not NextAuth/Clerk/OAuth, which would be over-engineering for a single named user).
 
 **Core technologies:**
-- Node.js 22.x LTS: runtime for the poller script — matches GitHub Actions' default tooling, native `fetch`
-- TypeScript 5.7+ + `zod`: type safety and runtime validation for config and undocumented API responses — catches drift before it causes silent 3am failures
-- GitHub Actions (`schedule` trigger): free, 5-minute-granularity scheduler — the only free option that meets the "every few minutes" requirement (Vercel Hobby cron is capped at once/day)
-- Resend: transactional email, verified custom domain + SPF/DKIM required for deliverability
+- RIDB Facilities API (`GET /facilities` with `latitude`/`longitude`/`radius`/`state`/`activity` params) — same endpoint, same key, already wired; additive query params, no new API surface
+- GitHub REST Contents API (sha-based optimistic-concurrency PUT) — single-call commit+push for `watches.json`, no SDK required, no new git tooling needed in serverless functions
+- Next.js Route Handlers + Middleware (both already available in Next.js 16.3.2) — server-side write logic and shared-secret gating, zero new dependencies
+- `zod` (already a dependency) — extend the existing `WatchSchema` into a discriminated union (`facility` | `area`) rather than building a second validation system
 
 ### Expected Features
 
-The feature set in PROJECT.md's Active requirements is confirmed by research as genuinely minimal — not scope-padded — and matches what every competitor in this space treats as non-negotiable table stakes.
-
 **Must have (table stakes):**
-- Config-driven watch definitions (park/campground, date range, site type)
-- Recurring unattended polling against the real availability API
-- Duplicate/spam suppression — persisted per-(watch, site, date) state, notify once per new opening
-- Actionable email content — park/campground name, site number, dates, and a direct booking link
-- Multi-watch support without cross-contamination (state scoped per watch)
-- Graceful API error/rate-limit handling (retry/backoff) so the schedule doesn't die silently
+- Area watch = one named Recreation Area, expanded server-side to constituent campground facility IDs — matches how every competitor tool (camply, recgov_daemon) and RIDB itself models the domain (RecreationArea → Facility → Campsite)
+- Hard result cap (~15-25 facilities) per area watch, with a truncation indicator — protects the existing rate-limit discipline and 5-minute cron budget
+- Site-type filter composes with area search, exactly as it does for single-campground watches today
+- Dashboard watch list, create/edit/delete form (area-or-campground typeahead, start/end date, site type) — the literal ask of this milestone
+- Inline validation reusing (not duplicating) existing zod schemas — addresses documented tech debt (validation drift between `src/` and `dashboard/`) rather than compounding it
 
-**Should have (competitive, defer to v1.x):**
-- Re-notify after a cooldown if a site remains open (first alert recipient may not have booked)
-- Flexible/nearby-date matching (±1-2 days)
-- Digest/batched emails when multiple sites match in one cycle
+**Should have (competitive):**
+- Named-area typeahead search (name → RecAreaID) — closes the biggest friction point in CLI-only competitors like camply, which require users to already know the numeric ID
+- Hybrid watch model (area with an explicit single-campground fallback) — smooth upgrade path, natural generalization of the existing schema
+- Per-campground breakdown in match notifications once a watch spans multiple facilities — table stakes at the notification layer even though area search itself is the differentiator
 
 **Defer (v2+):**
-- Web dashboard for managing watches (explicitly out of scope in PROJECT.md)
-- Backcountry/permit watching, multi-provider support (ReserveCalifornia, Parks Canada), SMS/push, multi-user — all explicitly out of scope
-- Auto-booking is a hard anti-feature (ToS violation, liability, and the well-documented "campsite bot" controversy) — notify-only is correct and should never be revisited
+- Lat/long + radius picker as an *alternative* to named-area search — RIDB lat/long data is inconsistently populated, making radius search unreliable without more investigation
+- Map/visual picker UI — high build cost, low incremental value for a single user who already knows their target parks by name
+- Per-facility opt-out within an area watch, "favorited" areas — real but speculative; build only if a concrete need surfaces
+- Unbounded "search everything" / whole-state discovery mode — explicitly an anti-feature; explodes request volume and produces noisy, low-value results for a single-user, notify-only tool
 
 ### Architecture Approach
 
-The system is a deployment-agnostic pipeline: a single orchestrator function (`run()`) with zero knowledge of HTTP or cron, wired from Config Loader → Rec.gov API Client → Matcher (pure diff function) → State Store (the *only* stateful component) → Notification Sender. Thin adapters (a CLI entrypoint, or a scheduled-workflow step) call `run()` — this keeps the deployment decision cheap to change and makes the core logic unit-testable with fixture data, no network required.
+Area search resolves at **poll time** inside the poller's existing `resolveWatches()` step (mirroring the existing name→facilityId resolution pattern with its cache/error-isolation scaffolding), not frozen into `watches.json` at watch-creation time — this keeps the feature useful as new campgrounds appear and keeps the write-path UI simple (it only ever writes area *criteria*, never a resolved facility list). The watch-management write path adds Route Handlers that read-then-PUT `watches.json` via the GitHub Contents API with sha-based optimistic concurrency, preserving the existing single-writer-per-file invariant by ensuring the poller only ever *reads* `watches.json` and only ever *writes* `state.json`/`runs.json`, while the dashboard owns the reverse.
 
 **Major components:**
-1. Config Loader — parses/validates watch definitions from env/JSON, schema-validated with zod
-2. Recreation.gov API Client — isolates the RIDB (metadata) and undocumented availability endpoint behind an adapter; owns retries/backoff/rate-limiting
-3. Matcher — pure function, `(availability, watchCriteria) → matchedSlots[]`, no I/O
-4. Notification State Store — the single piece of durable state; tracks `(watch, site, date) → lastNotifiedAt`; must survive between runs (git-committed JSON file for the GitHub Actions deployment)
-5. Notification Sender — formats and sends one batched summary email per run via Resend, never one email per matched site
+1. `src/recreation-gov/client.ts` — new `resolveArea()` function, same RIDB client/pacing/error-taxonomy conventions as existing `resolveFacility()`
+2. `src/run.ts` — the one genuinely new piece of orchestration: group multiple `ResolvedWatch` entries (one area watch → N facilities) by watch id and aggregate into a single `WatchOutcome`, preserving the "one outcome per watch id" assumption the dashboard's derive modules already depend on
+3. `dashboard/lib/github-write.ts` + `dashboard/app/api/watches/*` — new server-only write path: GET current file + sha, validate with strict shared schema rules, PUT with sha, retry once on 409
+4. `dashboard/middleware.ts` — shared-secret/Basic-Auth gate applied only to the new mutation routes, leaving existing read-only views public and unchanged
 
 ### Critical Pitfalls
 
-1. **Using RIDB when you need live availability** — RIDB only has metadata; the real per-day availability comes from an undocumented endpoint. Isolate it behind an adapter from day one so a schema change only touches one module.
-2. **Conflating "check failed" with "no availability"** — these must be distinct states at the type level. Escalate to the user only after N consecutive failed *cycles* (not single requests), one incident email with cooldown, not a per-cycle alert storm.
-3. **No persisted dedup state between runs** — the single most load-bearing piece of infrastructure in the system. Without it, a popular cancellation can generate 40+ duplicate emails in a few hours. Must be designed in Phase 1, not retrofitted.
-4. **Serverless/scheduled-job timeout from sequential per-watch polling** — fetch concurrently with bounded concurrency, dedupe fetches by campground+month, and respect the platform's time budget as watch count grows.
-5. **Emails landing in spam, silently defeating the "fast enough to book it" promise** — verify a custom sending domain with SPF/DKIM/DMARC before relying on it; email providers report "delivered" even when spam-filtered, so this failure mode is invisible without deliberate testing.
+1. **Area search blows the per-cycle request budget as watch count/region size grows** — an area watch can resolve to 20-50+ facilities; naively fetching availability for all of them every 5-minute cycle multiplies request volume past both the community ~1 req/sec courtesy convention and RIDB's actual enforced 50 req/min limit. Avoid by capping facilities-per-area-watch (10-15-25), caching the area→facility resolution (daily TTL, not every poll), and enforcing an explicit inter-request delay with fail-closed behavior (skip remainder this cycle).
+2. **Area search repeats v1.0's facility-name-mismatch bug (BANDIDO) at scale** — RIDB's `/facilities` geo query mixes non-campground types (visitor centers, group sites, boat ramps) into results, and unlike a single pinned watch, a bad match in a list of 20+ facilities is invisible without explicit review. Avoid by filtering on facility type/reservable status server-side and surfacing the resolved campground list to the user before saving the watch, with a per-watch exclude mechanism.
+3. **The write path introduces a second, uncoordinated writer racing the poller's own commit cycle** — v1.0's `concurrency` guard only protects against overlapping *poller* runs; it does nothing for a Vercel function writing at the same time. Avoid by keeping `watches.json` writes exclusively UI-owned (never write it from the poller), always re-fetching sha immediately before PUT, and retrying once on 409 rather than failing silently.
+4. **Shipping the write endpoint unauthenticated because "it's a single-user tool"** — the dashboard is public and unauthenticated by design (safe when read-only), but a write endpoint on a public URL is attackable by anyone who finds it, regardless of who the intended user is; blast radius includes deleting all watches or burning the RIDB/availability request budget with junk watches. Avoid with a minimum-viable server-side shared-secret gate (never client-side-only), never exposing the GitHub PAT to the browser bundle, and server-side validation caps independent of client-side UI limits.
 
 ## Implications for Roadmap
 
 Based on research, suggested phase structure:
 
-### Phase 1: Core Polling Engine (fetch, match, dedupe state)
-**Rationale:** Every downstream feature depends on this being correct — the research is unanimous that dedup state and the availability-fetch adapter are the highest-risk, most load-bearing pieces of the whole system and must not be bolted on later.
-**Delivers:** Config loader + validation, Recreation.gov availability adapter (isolated from RIDB metadata calls), pure matcher, persisted dedup state store (JSON file), typed success/no-match/check-failed outcome handling, basic backoff/rate-limiting.
-**Addresses:** Config-driven watches, recurring polling, dedup/spam suppression, multi-watch support, graceful error handling — all P1 table-stakes features from FEATURES.md.
-**Avoids:** Pitfall 1 (wrong endpoint), Pitfall 2 (error/no-match conflation), Pitfall 3 (duplicate spam), Pitfall 5 (rate-limiting/blocking).
+### Phase 1: Area-Based Search (poller-side)
+**Rationale:** Pure type-system/schema/orchestration change inside `src/`, no new I/O or auth surface, exercised by the same unit-test patterns already in place. Ships value immediately via hand-edited `watches.json` (exactly how v1.0's single-facility watches worked before any dashboard existed). Finalizes the `Watch` discriminated-union contract that Phase 2's UI must target, so the write-path form is built once against the final shape.
+**Delivers:** `Watch` discriminated union (`facility` | `area`) in both `src/` and `dashboard/`; `resolveArea()` in the RIDB client with facility-type/reservable filtering; `run.ts` aggregation of multiple resolved facilities into one `WatchOutcome` per watch id; a hard `maxFacilities` cap enforced at the schema level.
+**Addresses:** Area watch table-stakes feature, result cap, site-type filter composability, per-campground breakdown in notifications.
+**Avoids:** Pitfall 1 (request budget blowout) via schema-level cap and cached/paced resolution; Pitfall 2 (BANDIDO-at-scale) via facility-type filtering built into the resolver, not bolted on after.
 
-### Phase 2: Notification Delivery & Deployment
-**Rationale:** Once matching and dedup are proven correct locally (testable via CLI with fixture data, no deployment needed), wire up the actual email channel and unattended scheduling — the two things that turn a script into a running service.
-**Delivers:** Resend integration with verified sending domain (SPF/DKIM), batched summary email formatting (park/campground, site #, dates, direct booking link), GitHub Actions scheduled workflow with secrets, concurrency guard, and git-committed state persistence.
-**Uses:** Resend SDK, GitHub Actions `schedule` trigger and encrypted Secrets, `zod` for config validation.
-**Implements:** Notification Sender component, Trigger/Scheduler adapter (thin wrapper around `run()`).
-
-### Phase 3: Hardening & Observability
-**Rationale:** With the core loop live, the remaining risks are operational — silent failures, rate-limit exposure at higher watch counts, and confirming deliverability in practice rather than just in test.
-**Delivers:** Consecutive-failure escalation logic (single incident email with cooldown, not per-cycle alerts), heartbeat/status signal so the user can confirm the tool is still running, load-tested bounded-concurrency fetch queue, confirmed inbox-not-spam delivery on the real destination account, secrets-hygiene audit.
-**Addresses:** Remaining P1 requirement (graceful API error handling under real conditions) plus the pitfalls that only surface under sustained/production use.
+### Phase 2: Watch-Management Write Path (dashboard-side)
+**Rationale:** A materially different kind of risk than Phase 1 — first time the dashboard becomes a mutation surface, needs a secret/credential, and introduces a second writer into the git-as-datastore model. Sequencing after Phase 1 means the CRUD form is built once against the finalized area-or-facility watch shape rather than reworked later.
+**Delivers:** `dashboard/lib/github-write.ts` (sha-based read/PUT with 409 retry); `dashboard/app/api/watches/` Route Handlers (create/edit/delete) gated by a server-side shared secret; `dashboard/middleware.ts` auth gate on mutation routes only; the actual create/edit/delete form UI including area vs. facility watch-type toggle; UI surfacing of the resolved-campground list before save and "next poll in ~X min" propagation-delay messaging.
+**Uses:** GitHub Contents API, fine-grained PAT (server-only Vercel env var), Next.js Route Handlers + Middleware, shared zod validation (stricter dashboard-side rules matching `src/`'s).
+**Implements:** Watch-management write path component from ARCHITECTURE.md; preserves the single-writer-per-file invariant (UI owns `watches.json`, poller owns `state.json`/`runs.json`).
+**Avoids:** Pitfall 3 (write/poller race) via strict file-ownership boundary + sha-retry-on-409; Pitfall 4 (unauthenticated write endpoint) via mandatory server-side shared-secret gate and PAT never reaching the client bundle.
 
 ### Phase Ordering Rationale
 
-- Dedup/state-tracking must exist before any real polling runs, or the very first live deployment risks spamming the user — this is why it's bundled into Phase 1 rather than treated as a "nice to have added later."
-- Email/deployment is deliberately Phase 2, not Phase 1, because the matching/dedup logic is fully testable via CLI + fixtures without needing real infrastructure — this lets the riskiest logic get validated cheaply before committing to a deployment target.
-- Hardening (failure-cycle escalation, heartbeat, deliverability confirmation) is Phase 3 because these are the pitfalls that only manifest under sustained real-world operation (spam-folder drift, rate-limit patterns at scale, silent multi-day outages) — they can't be fully verified in Phase 1/2 dev cycles and shouldn't block initial launch, but must not be skipped before calling v1 "done."
+- Area search has zero dependency on the write UI; the write UI has a hard dependency on area search's finalized `Watch` type — building them in this order avoids reworking the form once area support lands.
+- Area search is lower-risk (pure logic/data, no new auth/I/O surface) and can be validated live via hand-edited JSON before the higher-risk write/auth surface is added on top — mirrors the incremental validation pattern already used across v1.0's phases.
+- The two most severe pitfalls in each phase (request-budget blowout and BANDIDO-at-scale for Phase 1; write race and unauthenticated endpoint for Phase 2) are each scoped entirely within their respective phase, so addressing them in phase order naturally front-loads the fixes rather than requiring cross-phase rework.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 1 (Recreation.gov API Client):** The availability endpoint is undocumented and MEDIUM confidence — implementation details (exact response shape, current rate-limit behavior, User-Agent requirements) should be re-verified against a live request or the community reference implementations (`camply`, `banool/recreation-gov-campsite-checker`) at planning time, not assumed from this summary alone.
+- **Phase 1 (Area-Based Search):** Exact RIDB geo-search query parameter names (`radius`, `activity` code for camping, pagination limits) and facility-type/reservable filter field names are MEDIUM/LOW confidence — corroborated by community client wrappers, not verified against a live authenticated response or the official Swagger doc. Recommend a fixture-capture spike (`scripts/capture-fixtures.ts` against a real `RIDB_API_KEY`) early in this phase, before hardcoding field names or activity codes.
+- **Phase 2 (Watch-Management Write UI):** GitHub Contents API sha/409 mechanics are well-documented (HIGH confidence) but recommend a quick live smoke test against a scratch file early in the phase rather than re-deriving fully from docs, given this is the first time the project writes to its own repo from Vercel.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 2 (Notification Delivery & Deployment):** Resend integration and GitHub Actions scheduled workflows are both HIGH-confidence, officially documented, and widely used — standard setup, no additional research needed.
-- **Phase 3 (Hardening):** The state-machine and backoff patterns described in PITFALLS.md are well-established software patterns (not domain-specific); implementation is straightforward engineering rather than needing new research.
+- **Both phases:** Overall architecture, auth approach (shared secret, not OAuth), and stack choices (no new frameworks) are well-established from this research pass and don't need re-research — implementation can proceed directly from ARCHITECTURE.md and STACK.md guidance.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | MEDIUM-HIGH | Deployment/scheduling and email choices are HIGH confidence (official docs); the core data-source endpoint is MEDIUM because it's undocumented by nature |
-| Features | MEDIUM | Commercial competitor internals (Campnab dedup/poll logic) are inferred from marketing/FAQ copy, not source code; open-source tool behavior is more directly verifiable but still not fully documented |
-| Architecture | MEDIUM-HIGH | Component/data-flow pattern verified against multiple independent real-world implementations (camply, banool/checker, a first-hand blog account); deployment-specific limits verified against current vendor docs |
-| Pitfalls | MEDIUM | RIDB metadata rate limits are HIGH confidence (official); the undocumented availability endpoint's actual rate-limit/ToS behavior is MEDIUM (community-sourced, no official doc exists) |
+| Stack | MEDIUM-HIGH | GitHub Contents API mechanics and Next.js Route Handler/Middleware usage are HIGH (stable, well-documented APIs); exact RIDB geo-search field/activity-code list is MEDIUM, not independently confirmed against a live authenticated response in this research session |
+| Features | MEDIUM | WebSearch-verified across multiple community tools (camply, recgov_daemon, CampFlare); no direct access to official RIDB API docs in this pass — RecArea→Facility hierarchy and "named area over radius" recommendation corroborated by multiple independent sources, but exact RIDB query-parameter names need verification during implementation |
+| Architecture | MEDIUM-HIGH | Codebase facts (existing file structure, conventions, invariants) are HIGH — read directly from source; RIDB geo-search params and GitHub Contents API behavior are MEDIUM, corroborated by WebSearch/training data but not re-verified against live official docs in this pass |
+| Pitfalls | MEDIUM-HIGH | Rate limits (RIDB's 50 req/min) and Contents API 409 semantics verified via official docs/community discussions (HIGH); project-specific race/threat analysis is sound architectural reasoning grounded in PROJECT.md but not third-party-verified (MEDIUM) |
 
 **Overall confidence:** MEDIUM-HIGH
 
 ### Gaps to Address
 
-- The undocumented availability endpoint's exact rate-limit thresholds and response-shape stability are unknowable from official sources — mitigate by isolating it behind a single adapter module (per Pitfall 1) so future breakage is a one-file fix, and by building in conservative default throttling from day one rather than tuning up from an aggressive default.
-- Commercial competitors' (Campnab, etc.) actual dedup/re-notify implementation details are inferred from marketing copy, not verified — this project's dedup design (per-watch/site/date state with `lastNotifiedAt`) is independently well-reasoned from first principles and corroborated by the architecture research, so this gap doesn't block roadmap decisions, but exact "industry standard" cooldown windows (if ever added as a v1.x feature) should be treated as a design choice, not a researched fact.
-- GitHub Actions' private-repo free-tier minute budget (2,000 min/month) is tight at a 5-minute polling cadence (~2,600-5,200 min/month estimated) — this needs an explicit decision during roadmap/planning: either make the repo public (config lives in Secrets, not the repo, so this is low-risk) or poll every 10-15 minutes instead of 5 on a private repo. Flag for Phase 1/2 planning.
+- **Exact RIDB geo-search parameter names and response fields** (`FacilityLatitude`/`FacilityLongitude`, `activity=9` for camping, `state`/`radius`/`limit`/`offset`): not re-verified against a live authenticated RIDB response or the official Swagger/OpenAPI doc in this research pass. Resolve early in Phase 1 by running `scripts/capture-fixtures.ts` with a real `RIDB_API_KEY` against a geo query and comparing to the existing (synthetic) `ridb-facilities.json` fixture.
+- **RIDB facility-type/reservable filter fields**: the exact field(s) to filter on (e.g. `FacilityTypeDescription`, `Reservable`) to exclude non-campground results (visitor centers, boat ramps, group sites) from area-search results are not confirmed against a live response — needed before Phase 1's resolver can safely filter, since this is the direct mitigation for Pitfall 2 (BANDIDO-at-scale).
+- **Precise request-budget ceiling under real conditions**: the 5-minute cron budget interacting with RIDB's 50 req/min limit and the undocumented availability endpoint's unofficial ~1 req/sec convention needs a concrete cap chosen (10? 15? 25 facilities per area watch?) and validated via a load-test-style run with a realistic multi-campground region watch before merge, per PITFALLS.md's verification guidance.
+- **Watch-management write-path threat model detail**: what "reasonable" server-side validation caps (max total watches, max facilities across all watches) should be is not pinned down numerically — needs a concrete number chosen during Phase 2 planning, informed by the request-budget ceiling above.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Vercel Cron Jobs official docs (`vercel.com/docs/cron-jobs`, `vercel.com/docs/limits`) — Hobby once/day cap, Pro per-minute cadence
-- Resend npm package page and resend.com/changelog — current major version, free-tier limits
-- Troubleshooting Vercel Cron Jobs | Vercel Knowledge Base — fire-and-forget behavior, timing imprecision
-- RIDB API (`ridb.recreation.gov`) — official documented metadata API, optional API key only raises rate limits
+- Direct reads of `src/types.ts`, `src/config/schema.ts`, `src/config/watches.ts`, `src/run.ts`, `src/recreation-gov/client.ts`, `dashboard/lib/github.ts`, `dashboard/lib/schema.ts`, `.github/workflows/poll.yml`, `.planning/PROJECT.md` (this repo) — ground truth for existing architecture, conventions, and constraints
+- Live probe (research session): unauthenticated `GET https://ridb.recreation.gov/api/v1/facilities` → `HTTP 401 {"error":"Unauthorized Access"}` — confirms RIDB geo search requires the existing `RIDB_API_KEY`
+- [RIDB API 1.0.0 OAS 3.0 official docs](https://ridb.recreation.gov/docs) — confirms 50 req/min rate limit
+- [GitHub REST Contents API docs](https://docs.github.com) and [GitHub Contents API 409 Conflict discussion](https://github.com/orgs/community/discussions/62198) — sha-based optimistic concurrency, standard refetch-and-retry pattern
 
 ### Secondary (MEDIUM confidence)
-- GitHub — `juftin/camply`, `banool/recreation-gov-campsite-checker` — corroborate the undocumented availability endpoint pattern and fetch→match→notify architecture across multiple independent implementations
-- Jacob Bokor — "Building a Campsite Availability notification service" — first-hand account confirming component breakdown and that state-management/dedup was the most effort-intensive part
-- Campnab FAQ, Outdoorithm, Happiest Outdoors — commercial competitor feature/pricing patterns (vendor-published, not independently verified)
-- SendGrid/Resend deliverability comparison articles — ~17% transactional spam-folder rate stat, domain-auth guidance
+- [camply GitHub (juftin/camply)](https://github.com/juftin/camply) and its [docs](https://juftin.com/camply/command_line_usage/) — RecArea/Facility/Campsite hierarchy, `--rec-area` search pattern
+- [recgov_daemon GitHub (rmjacobson/recgov_daemon)](https://github.com/rmjacobson/recgov_daemon) — lat/long+radius variant, notes on RIDB blank lat/long data quality
+- [Campflare](https://campflare.com/) and [Free Campsite Tracker Alternatives to Campnab](https://campnab.com/blog/free-campsite-tracker-alternatives-to-campnab) — competitor UX landscape
+- WebSearch on community RIDB client wrappers (`node-ridb`, `ships/ridb`) for geo-search query parameter names — cross-referenced across independent sources but not against the primary swagger/OpenAPI spec directly
+- [usda.github.io/RIDB](https://usda.github.io/RIDB/) — facility schema/type field references
 
 ### Tertiary (LOW confidence)
-- Backpacking Light forum thread — community anecdote on recreation.gov's native alert limitations
-- KQED "bots stealing campsites" article, hereandthere.club — supports anti-auto-booking rationale, not a technical source
-- recbot.site vendor page — single-source positioning reference
+- Exact RIDB `activity=9` (camping) code and precise geo-search field names — community-sourced convention, flagged for fixture re-capture before coding the resolver
 
 ---
-*Research completed: 2026-08-16*
+*Research completed: 2026-08-25*
 *Ready for roadmap: yes*

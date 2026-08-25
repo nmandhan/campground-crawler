@@ -1,162 +1,125 @@
 # Feature Research
 
-**Domain:** Recreation.gov campsite availability watcher / "campsite sniper" tools
-**Researched:** 2026-08-16
-**Confidence:** MEDIUM
-
-Research is based on publicly documented behavior of the two dominant patterns in this space:
-1. **Commercial SaaS watchers** (Campnab, and similarly-positioned CampFlare/Schnerp/Campsite Notifier) — paid, SMS-first, sell "concurrent scans" as the product.
-2. **Open-source CLI/self-hosted tools** (camply, banool/recreation-gov-campsite-checker, recbot) — free, run by the user, notification channel is pluggable.
-
-Recreation.gov also shipped its own native "Campsite Availability Alerts" (Sept 2023) limited to 3 campgrounds at a time, frontcountry-only — this sets the baseline floor of what "good enough" looks like for casual users, and is a useful reference for table-stakes scope.
-
-Note: exact internals of these tools (dedup logic, polling implementation) are not fully open/documented for the commercial products — findings there are inferred from FAQ/marketing copy (MEDIUM confidence) rather than source code. The open-source tools' behavior is more directly verifiable from source/docs but the fetched docs excerpts didn't expose full implementation detail either — flagged LOW/MEDIUM per item below.
+**Domain:** Campsite availability trackers — area-based search + self-service watch management (v1.1 scope)
+**Researched:** 2026-08-25
+**Confidence:** MEDIUM (WebSearch-verified across multiple community tools; no direct Context7/official RIDB docs access — RIDB endpoint shapes confirmed via multiple independent secondary sources, not the primary swagger doc itself)
 
 ## Feature Landscape
 
 ### Table Stakes (Users Expect These)
 
-Features a v1 tool cannot ship without — missing these makes the tool useless or untrustworthy for its one job.
-
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Define one or more watches (park/campground + date range + site/equipment type) | This is the entire product — every competitor (Campnab, camply, recreation.gov native alerts, recbot) is built around "tell me what you want, I'll watch for it" | LOW–MEDIUM | Config-file/env driven per PROJECT.md; commercial tools expose this via UI, but the underlying data model (park, campground, dates, site filters) is identical |
-| Recurring automated polling against the real API, unattended | Users deliberately want to stop manually refreshing recreation.gov; if it requires manual triggering it isn't a "watcher" | LOW–MEDIUM | Recreation.gov exposes a public availability API (`/api/camps/availability/campground/{id}/month`) that all known tools (camply, banool/checker) use instead of scraping HTML |
-| Notification the moment a matching site becomes available | Core value prop across every tool in this space — Campnab explicitly markets speed as the differentiator ("spots go quickly") | LOW | Timing (poll interval) is the actual lever, not the notify mechanism itself |
-| Duplicate/spam suppression — don't re-alert every poll cycle for a still-open site | Campnab explicitly designed around "notify only on reserved→open transition"; users on forums complain about noisy tools that alert repeatedly for known-open sites | MEDIUM | Requires state tracking (last-known-availability per site+date) between poll runs — see Feature Dependencies below |
-| Actionable notification content: campground/park name, specific site number/ID, date(s), and a direct booking link | Campnab's SMS format (park, campground, arrival date, duration, site number, direct link) is the proven pattern; without a direct link the user loses precious seconds navigating recreation.gov manually during a race against other campers | LOW | Recreation.gov site/campground pages are linkable by ID (`recreation.gov/camping/campsites/{siteId}`) so this is just URL templating, not scraping |
-| Support for multiple concurrent/independent watches without cross-contamination | Every tool (Campnab tiers by "concurrent scans," camply accepts multiple park IDs, recreation.gov native caps at 3) treats "watch N things at once" as core, not a stretch feature | MEDIUM | Each watch needs its own dedup/state so one watch's "already notified" doesn't suppress a different watch's match on the same site |
-| Reliable, unattended scheduling (cron/serverless cron) | If the poller silently stops, the entire value proposition (catching a sub-minute-window opening) fails silently and the user has no recourse | LOW–MEDIUM | Ties directly into the deployment decision (Vercel cron vs. scheduled script) flagged as open in PROJECT.md |
-| Handles API errors/rate limits gracefully (retry, backoff) without crashing the schedule | Recreation.gov's API is unofficial/public but not a stable partner API — commercial tools throttle deliberately ("we deliberately don't scan faster than 1-4 min to avoid over-tasking the park systems") to avoid being blocked | LOW–MEDIUM | Also protects the user's own IP/API key from being rate-limited or blocked |
+| Search "area" = a named Recreation Area (park/forest unit), not a free-form map draw | This is how every major tool in this space (camply, recgov_daemon, RIDB itself) models the domain. RIDB's own hierarchy is `RecreationArea` → `Facility` (campground) → `Campsite`. camply's primary and most-used search mode is `--rec-area <RecAreaID>`, which returns every campground facility under that park/forest. Users already think in terms of "Yosemite," "Big Sur," "Glacier NP" — not coordinates. | LOW–MEDIUM | Maps directly onto existing RIDB client: add a `FacilitiesForRecArea` (or equivalent `/recareas/{id}/facilities`) call layered on top of the existing single-facility lookup. No new geo/radius math needed. |
+| Result cap on "search all campgrounds in an area" | Recreation Areas can contain dozens of campgrounds (e.g., large national forests). Unbounded fan-out breaks the ~1 req/sec availability-API courtesy rate already established in this project and blows up run time on a 5-min cron. | LOW | A hard cap (e.g., 20–30 facilities per watch, or all facilities with a documented soft warning past that) is standard practice — camply and recgov_daemon both implicitly bound scope by requiring you to pick one rec-area or a small radius, not "search everything." Reasonable default: cap at ~25 campgrounds/watch; surface a "N campgrounds, showing first 25" note in the UI if truncated. |
+| Site-type filter still applies at area scope | Same filter (tent/RV/group/etc.) that exists in v1.0's single-campground watch; users expect it to compose with area search, not be dropped. | LOW | Filter logic already exists; only the fan-out (which campgrounds to check) is new. |
+| Watch list view (see all watches, current status) | Table stakes for any "manage watches through the dashboard" feature — this already exists in v1.0's read-only dashboard; extending it to be editable is the whole point of this milestone. | LOW (dashboard read path exists) | Extend existing dashboard data model, don't rebuild it. |
+| Create watch form: pick area OR single campground, start date, end date, site type | Minimum viable form for watch creation. Every competitor tool requires exactly these 3–4 inputs (location, dates, site type/party size). Nothing less is usable; nothing more is expected. | MEDIUM | Area picker is a searchable dropdown/typeahead over RIDB RecreationAreas (and/or Facilities), not free text — free text risks unmatched names silently failing. |
+| Edit / delete a watch | Users will get dates or areas wrong and need to fix without re-creating from scratch; delete is needed to stop watches once booked or no longer wanted. | LOW–MEDIUM | Straightforward CRUD over the existing `watches.json`-equivalent store; main complexity is wiring dashboard writes back to whatever config store is used (see Dependencies below). |
+| Inline validation (dates, area exists, site type valid) | Users editing via a form expect immediate feedback (e.g., end date before start date, area not found) rather than a cryptic failure on the next poll cycle 5 minutes later. | LOW–MEDIUM | zod schemas already exist for watch config in v1.0 (`src/`) — reuse/share validation rules between dashboard form and poller rather than re-deriving them (this is called out as existing tech debt: validation logic is currently duplicated between `src/` and `dashboard/`; this milestone makes that duplication worse if not addressed). |
 
 ### Differentiators (Competitive Advantage)
 
-Not required for v1, but where this tool could be noticeably better than the low end of the market (recreation.gov's native alerts) without matching the complexity of full commercial SaaS.
-
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Fast poll interval (1–5 min) on hot dates | Campnab explicitly tiers pricing by poll speed (1-4 min = premium tier); faster polling = more likely to catch a fleeting opening before other watchers | LOW–MEDIUM | Mostly a scheduling/infra cost question, not a feature-complexity one — cron frequency vs. API load |
-| Flexible/nearby-date matching (e.g. ±1–2 days around a preferred date) | Campnab's "Flexible Dates" is a named, marketed feature — widens the odds of a hit, especially for popular weekend dates | MEDIUM | Requires re-checking a small date window per watch instead of exact-match, more API calls per cycle |
-| Re-notify after a cooldown if the site is still open (not just first-seen) | Campnab explicitly re-alerts a few minutes later if a "someone abandoned checkout" toggle occurs — useful because the first alert recipient may not have booked | MEDIUM | Needs a time-boxed re-notify rule (e.g. re-alert if still open after 10+ min and not marked "handled" by user) — balance against the anti-spam table-stakes requirement |
-| Watching backcountry/wilderness permits (not just frontcountry campsites) | Campnab and camply both extend to permits — a real recreation.gov API surface distinct from campground availability, opens the tool to a wider use case | MEDIUM–HIGH | Different API endpoints/response shape than campsite availability; explicitly out of scope unless requested — note for future milestone |
-| Rich digest/summary email when multiple matches land in one poll cycle | Avoids inbox flooding when several watches or several sites hit simultaneously (e.g. a whole loop opens up) | LOW–MEDIUM | Batch outgoing notifications per poll run instead of one email per matched site |
-| Web dashboard for managing watches | Recreation.gov's native alerts and Campnab both use a UI; explicitly deferred in PROJECT.md for v1 but is the most obvious v1.x expansion once config-file watches are outgrown | HIGH | Requires DB + auth eventually — deliberately deferred |
-| Multi-site coverage (ReserveCalifornia, state parks, Parks Canada, Yellowstone lodges) | Campnab covers this breadth; genuinely differentiates a hobby tool from a Recreation.gov-only script | HIGH | Each provider has a different API/data shape; explicitly deferred per PROJECT.md |
+| Typeahead search over RIDB Recreation Areas by name (e.g., "Big Sur" → matches Los Padres NF / specific state parks) | Removes the single biggest friction point competitors like camply have: users must already know the numeric RecAreaID and look it up via recreation.gov's own search UI first. Solving name → RecAreaID *inside* the product is a real differentiator over CLI-only tools. | MEDIUM | Needs an RIDB search-by-query call plus a lightweight local cache/index (RIDB's own free-text search across ~possibly ambiguous naming can return noisy results); worth caching RecArea metadata since it changes rarely. |
+| Combined watch = area + explicit fallback to single campground (hybrid model) | Lets a user narrow to "just Kirk Creek" without losing the option to widen later — smooth upgrade path from v1.0's exact-facility watches to v1.1's area watches, and matches how real users actually search (start broad, narrow once they see options). | MEDIUM | This is the natural generalization of the existing watch schema: `facilityIds: string[]` (populated either directly or by area expansion) rather than a hard fork between "area watch" and "campground watch" types. |
+| Per-campground breakdown in match emails/dashboard within an area watch (which specific campground + site opened, not just "something in Yosemite") | Table-stakes at the *notification* level even though area search itself is a differentiator — CampFlare and camply both report the specific campground/site, not just the region, because that's what's actionable for booking. | LOW (mostly a data-shape / formatting concern, reuses existing match/email code) | Not really optional — folding this into "differentiator" only because it depends on the new area-search feature existing at all; once area search exists, this level of detail is expected. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|------------------|-------------|
-| Auto-booking / automated checkout completion | "Just book it for me the instant it's open" feels like the logical endpoint of a watcher | Recreation.gov's terms of service prohibit automated reservation completion; this is the well-documented "campsite bot" controversy (KQED, forum threads on "bots stealing campsites") that has drawn public/agency scrutiny; also creates real liability (charging a user's card without final confirmation) and account-ban risk | Notify-only with a direct deep link, matching PROJECT.md's explicit decision; user completes checkout manually |
-| SMS/push notifications for v1 | Commercial leaders (Campnab, Campsite Notifier) are SMS-first because speed matters and SMS is more immediate than email | Adds a paid third-party SMS provider, phone number handling, and delivery-reliability surface area for a single-user hobby tool where email is "fast enough" per PROJECT.md's stated constraint | Email via a transactional provider (Resend/SendGrid); SMS/push deferred to v1.x if email proves too slow |
-| Multi-user accounts / login / billing | Natural next step if this were productized like Campnab | Massive scope increase (auth, tenancy, billing) for a tool whose whole point is "I built this for myself" | Config-file/env-var watches, single deployment per user, as already decided in PROJECT.md |
-| Scraping recreation.gov HTML instead of using its availability API | Might seem more "complete" (captures anything a human sees) | Fragile to markup changes, more likely to trip anti-bot defenses, contradicts PROJECT.md's explicit constraint to use the official/public API | Use recreation.gov's public JSON availability API (used by camply, banool/checker, and reportedly Campnab itself) |
-| Polling as fast as technically possible (sub-minute, no backoff) | "Faster polling = better odds of catching the opening" | Risks IP/API-key throttling or blocking, and Campnab explicitly caps even its premium tier at 1-4 min to avoid "over-tasking" recreation.gov's systems — a single-user tool has even less excuse to hammer the API | Tiered/reasonable interval (e.g. 2–5 min default), with backoff on errors; treat sub-minute polling as a stretch/last-resort optimization, not a default |
-| Alerting on every poll cycle while a site remains open | Feels "thorough" but is the #1 complained-about failure mode of naive watchers | Destroys trust/usefulness of email — user starts ignoring notifications (alert fatigue), defeating the tool's purpose | State-tracked dedup: notify once per (watch, site, date-range) newly-available transition, per table stakes above |
+| Map/radius picker (draw a circle or drop a pin on a map) for defining "area" | Feels more precise/visual than picking a named park; competitors like Campnab/CampFlare hint at "map your public lands" so it looks like table stakes | High implementation cost (map library, geocoding, lat/long UI) for a single-user tool where the user already knows the parks they care about by name; RIDB's own lat/long radius search is also unreliable because many facilities have blank lat/long fields, so radius search silently under-returns results | Named Recreation Area / Facility typeahead (see Table Stakes above) covers the real use case; only add radius search later if a specific gap surfaces (e.g., searching a sprawling area with no single RecAreaID) |
+| "Search everything, all parks, all dates" unbounded discovery mode | Sounds appealing — "just tell me what's available anywhere" | Explodes the number of availability-API calls per poll cycle far past the community-respected ~1 req/sec courtesy limit already documented in this project's stack decisions; also produces noisy, low-value emails for a single user with specific trips in mind | Keep watches scoped (one area or one campground, one date range, one site type) — this is consistent with the project's existing notify-only, single-user philosophy |
+| Full account/auth system for the watch-management UI (multi-user login, RBAC) | "Management UI" naturally suggests a real app with auth | Explicitly out of scope per PROJECT.md ("Multi-user support / accounts / login — single-user personal tool") and adds real infra (session store, auth provider) for zero benefit to a single user | Keep the dashboard as it is today: public/no-auth, since it holds no sensitive data (already a documented decision in PROJECT.md's Key Decisions) |
+| Real-time/live-updating watch list (websockets, polling every few seconds in the browser) | "Feels responsive" | The underlying poller only runs every 5 minutes on a GitHub Actions cron — sub-minute UI refresh creates a false impression of freshness and adds unnecessary infra (websocket server, or aggressive client polling against the GitHub raw content host) | Dashboard already reads from committed JSON with a cache window (v1.0 pattern) — keep that model; a manual refresh button or a "last checked" timestamp is sufficient |
+| Auto-expanding an area watch to *every* campground on Recreation.gov within a state (no park-level scoping) | Users might think "just watch all of California" is more convenient than picking parks one by one | RIDB has no small, stable "state facilities" index designed for this; results would run into the thousands, blowing past rate limits and result caps described above, and produce an unusable number of matches | Scope area watches to one RecreationArea (or a small, explicit list of Facility IDs) at a time; users can create multiple area watches if they want multi-park coverage |
 
 ## Feature Dependencies
 
 ```
-Recurring automated polling (unattended)
-    └──requires──> Config-driven watch definitions (park, dates, site type)
+Area-based search (RecArea → Facility fan-out)
+    └──requires──> Existing single-facility RIDB client + availability poller (v1.0)
+                       └──extends──> Watch schema: facilityId (single) → facilityIds (list), populated by area expansion or direct pick
 
-Duplicate/spam suppression
-    └──requires──> Persisted state per (watch, site, date) — "last known status"
-                       └──requires──> Some durable storage between poll runs (file/DB/KV)
+Watch-management UI (create/edit/delete)
+    └──requires──> Area typeahead / RecreationArea search (to populate the "area" field without hand-typed IDs)
+    └──requires──> Shared validation rules (zod schemas) between dashboard and poller
+                       └──addresses existing tech debt──> validation/formatting logic currently duplicated between src/ and dashboard/ (per PROJECT.md Context)
+    └──requires──> A writable watch store reachable from the dashboard (Next.js app on Vercel) that the poller (GitHub Actions on a separate schedule) also reads
+                       └──open architectural question──> v1.0's state files are committed back to the repo by the poller's own GitHub Actions job; the dashboard has so far been read-only. Writing watches.json *from* the dashboard means either (a) the dashboard commits to the repo via GitHub API/token, or (b) watch config moves to a small external store (e.g., a KV/DB) that both the poller and dashboard read/write — this is a real design decision for the roadmap phase that implements the UI, not something to hand-wave.
 
-Multiple concurrent watches without cross-contamination
-    └──requires──> Duplicate/spam suppression (state must be scoped per-watch)
+Per-campground breakdown in notifications ──enhances──> Area-based search (meaningless without it; area search must know which specific facility/site matched)
 
-Actionable notification content (direct link, site #, dates)
-    └──requires──> Recreation.gov API response mapping (campground ID, site ID → URL)
-
-Re-notify after cooldown (differentiator)
-    └──enhances──> Duplicate/spam suppression (adds a time-boxed exception to "notify once")
-
-Flexible/nearby-date matching (differentiator)
-    └──enhances──> Config-driven watch definitions (adds a date-window param)
-
-Fast poll interval
-    └──conflicts──> Reasonable-rate-limiting anti-feature guardrail (tune, don't max out)
+Map/radius picker ──conflicts with──> Result-cap / rate-limit discipline (anti-feature; drop unless a concrete gap emerges)
 ```
 
 ### Dependency Notes
 
-- **Duplicate/spam suppression requires persisted state:** Without storing "did I already alert for this exact site+date combination," every poll cycle would re-notify for anything still open. This is the single most load-bearing piece of infrastructure in the whole system — even a simple JSON file or SQLite table works for a single-user tool, but *something* durable must survive between scheduled runs.
-- **Multiple concurrent watches requires per-watch-scoped state:** If state is tracked globally instead of per-watch, two watches on the same campground with different date ranges could suppress each other's legitimate first-time alerts. State keys should be `(watch_id, site_id, date)` at minimum.
-- **Re-notify-after-cooldown enhances (and slightly complicates) dedup:** The table-stakes rule is "notify once per new opening." The differentiator adds "...unless it's been open for N+ minutes and might have been missed by the first recipient." This should be implemented as an explicit, separate rule layered on top of the base dedup logic, not baked into it, so v1 can ship with the simpler rule and add this later.
-- **Fast poll interval conflicts with the rate-limiting anti-feature guardrail:** These are in tension by design. The resolution (per Campnab's own stated behavior) is to pick a deliberately-throttled default (minutes, not seconds) rather than polling as fast as infrastructure allows.
+- **Watch-management UI requires area typeahead:** Without name-based search over RIDB Recreation Areas, the "create watch" form would force users back to hand-finding numeric RecAreaIDs on recreation.gov — defeating the purpose of a UI at all.
+- **Watch-management UI requires a writable, poller-visible store:** This is the highest-risk dependency for the roadmap. v1.0's architecture assumes the poller (GitHub Actions) is the sole writer of state back to the repo, and the dashboard (Vercel) is a read-only consumer of raw.githubusercontent.com. Adding user-driven writes from the dashboard breaks that one-writer assumption and needs an explicit decision (repo-commit-via-API vs. external store) before implementation — flag this for roadmap phase sequencing and possibly its own research/design spike.
+- **Area-based search extends, not replaces, the existing watch model:** The cleanest path is generalizing `facilityId: string` to `facilityIds: string[]` (or `{ recAreaId } | { facilityIds }`), so v1.0's already-validated single-campground watches keep working unchanged and area watches are just "many facilities under one watch." This avoids a breaking schema migration.
+- **Per-campground breakdown enhances area search:** Once a watch spans multiple facilities, the matcher/notifier must already know and surface *which* facility/site matched — this isn't extra scope, it's a required consequence of the area feature, not an optional add-on.
 
 ## MVP Definition
 
-### Launch With (v1)
+### Launch With (v1.1)
 
-Matches PROJECT.md's Active requirements almost exactly — confirmed as genuinely minimal by this research, not scope-padded.
-
-- [ ] Config-file/env-driven watch definitions (park/campground, date range, site type) — the whole product hinges on this
-- [ ] Scheduled polling against recreation.gov's public availability API — table stakes, no viable alternative
-- [ ] Per-watch, per-site, per-date state tracking to suppress duplicate alerts — without this the tool is actively worse than doing nothing (alert fatigue)
-- [ ] Email notification with campground/park name, site number, date(s), and a direct link to the site on recreation.gov — link is what makes it "actionable," not just "informative"
-- [ ] Graceful handling of API errors/rate limits (retry/backoff) so the schedule doesn't silently die
+- [ ] Area watch = one RecreationArea ID, expanded server-side to its constituent campground Facility IDs at poll time (or watch-creation time, cached) — why essential: this is the core new capability requested and the dominant pattern across community tools
+- [ ] Result cap (~25 facilities) per area watch, with an explicit "truncated" indicator if exceeded — why essential: protects the existing rate-limit discipline and cron time budget
+- [ ] Dashboard form: create watch with area-or-campground typeahead, start date, end date, site type — why essential: this is the stated milestone goal ("manage watches through the dashboard UI instead of hand-editing watches.json")
+- [ ] Edit and delete watch from dashboard — why essential: without edit/delete, "management" is really just "add," which isn't the full ask
+- [ ] Inline validation reusing existing zod schemas (shared, not duplicated) — why essential: prevents the current src/dashboard validation-drift tech debt from compounding as a second copy is added for the new area field
 
 ### Add After Validation (v1.x)
 
-- [ ] Re-notify after a cooldown window if a site remains open — add once you've observed the "first alert wasn't fast enough" failure mode firsthand
-- [ ] Flexible/nearby-date matching (±1-2 days) — add once exact-date watches feel too narrow in practice
-- [ ] Digest/batched emails when multiple sites match in one poll cycle — add once you experience an inbox-flooding poll run
-- [ ] Faster polling tier for specific high-value watches — add once you know which watches actually matter most
+- [ ] Recently-used / favorited areas for faster re-entry — trigger: once the user has a handful of real watches and re-picking the same park repeatedly becomes friction
+- [ ] Per-facility opt-out within an area watch (e.g., "watch all of Yosemite Valley except X campground") — trigger: if a specific real trip surfaces this need; not worth building speculatively
 
 ### Future Consideration (v2+)
 
-- [ ] Web dashboard for managing watches — defer until config-file management becomes the actual bottleneck (explicitly out of scope in PROJECT.md)
-- [ ] Backcountry/wilderness permit watching — defer, different API surface, not requested yet
-- [ ] Multi-provider support (ReserveCalifornia, Parks Canada, state parks) — defer, explicitly out of scope in PROJECT.md
-- [ ] SMS/push notifications — defer until email proves too slow in practice; explicitly deferred in PROJECT.md
-- [ ] Multi-user/accounts — defer indefinitely; this is a personal tool, not a product, per PROJECT.md
+- [ ] Lat/long + radius search as an alternative to named RecArea — why defer: RIDB lat/long data is inconsistently populated per-facility (many blank), making radius search unreliable without more investigation; named-area search covers the stated use cases (Big Sur, Yosemite Valley, a park unit) already
+- [ ] Map-based visual picker — why defer: high build cost, low incremental value for a single user who already knows target parks by name; revisit only if named search proves insufficient in practice
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Config-driven watch definitions | HIGH | LOW | P1 |
-| Scheduled unattended polling | HIGH | LOW–MEDIUM | P1 |
-| Recreation.gov availability API integration | HIGH | LOW–MEDIUM | P1 |
-| Dedup/state tracking to avoid spam | HIGH | MEDIUM | P1 |
-| Actionable email content (link, site #, dates) | HIGH | LOW | P1 |
-| Multi-watch support (scoped state) | HIGH | MEDIUM | P1 |
-| API error handling / backoff | MEDIUM | LOW–MEDIUM | P1 |
-| Re-notify after cooldown | MEDIUM | MEDIUM | P2 |
-| Flexible/nearby-date matching | MEDIUM | MEDIUM | P2 |
-| Digest/batched notifications | LOW–MEDIUM | LOW–MEDIUM | P2 |
-| Web dashboard | LOW (for single user) | HIGH | P3 |
-| Backcountry permits | LOW (not requested) | MEDIUM–HIGH | P3 |
-| Multi-provider support | LOW (not requested) | HIGH | P3 |
-| SMS/push | LOW (email deemed sufficient) | MEDIUM | P3 |
-| Auto-booking | N/A — explicitly rejected | N/A | Never (anti-feature) |
+| RecArea → Facility fan-out area search | HIGH | MEDIUM | P1 |
+| Result cap / truncation handling | HIGH (risk mitigation) | LOW | P1 |
+| Area/campground typeahead in UI | HIGH | MEDIUM | P1 |
+| Create/edit/delete watch UI | HIGH | MEDIUM | P1 |
+| Shared validation (dashboard + poller) | MEDIUM (mostly reduces tech debt) | LOW–MEDIUM | P1 |
+| Writable watch store design (repo-commit vs external store) | HIGH (blocking dependency) | MEDIUM–HIGH | P1 (must resolve before P1 UI work lands) |
+| Per-campground breakdown in notifications | MEDIUM | LOW | P2 |
+| Recently-used areas | LOW | LOW | P3 |
+| Per-facility opt-out within area watch | LOW–MEDIUM | MEDIUM | P3 |
+| Lat/long radius search | LOW (data-quality risk) | HIGH | P3 |
+| Map picker | LOW | HIGH | P3 (anti-feature unless a gap emerges) |
 
 ## Competitor Feature Analysis
 
-| Feature | Campnab (commercial SaaS) | camply (open-source CLI) | This project |
-|---------|---------------------------|---------------------------|---------------|
-| Watch definition | UI-based scan config (park, campground, dates, filters), tiered by # of concurrent scans | CLI flags/config: recreation area, date range, campgrounds/campsites, `--search-forever` | Config file/env vars, no UI, matches camply's model more than Campnab's |
-| Notification channel | SMS primary, email available | Pluggable: email, Slack, SMS (Twilio), Pushover, Pushbullet, Ntfy, Telegram, Apprise, webhook | Email only for v1 (deliberate scope cut per PROJECT.md) |
-| Dedup behavior | Notify on reserved→open transition; deliberate re-notify a few min later on abandoned-checkout toggles | Not explicitly documented in available docs; likely relies on user re-running or persistent process state (LOW confidence — unverified) | Explicit per-watch/site/date state tracking, "notify once on new opening" as table stakes, cooldown re-notify deferred to v1.x |
-| Poll frequency | Tiered: 10-15 min (low tier) to 1-4 min (premium); deliberately capped to avoid overloading recreation.gov | User/infra-controlled (cron-driven or `--search-forever` loop); no documented enforced floor | Deliberately throttled default (minutes, not seconds), per anti-feature guardrail |
-| Notification content | Park, campground, arrival date, duration, site number, direct link (SMS); email variant available | Notification content not fully documented in fetched sources (LOW confidence) | Explicit table-stakes requirement: park/campground, site #, dates, direct booking link |
-| Booking | None — notify only, user books manually (matches ToS) | None — notify only | None — notify only (matches PROJECT.md decision and industry norm) |
-| Scope of sites covered | Recreation.gov + Yellowstone lodges + several Canadian/state park systems | Recreation.gov, plus other providers (Reserve America, Yellowstone, etc. per its multi-provider architecture) | Recreation.gov only for v1; multi-provider explicitly deferred |
+| Feature | camply (CLI) | CampFlare (hosted, free) | Our Approach |
+|---------|--------------|---------------------------|--------------|
+| Area definition | `--rec-area <RecAreaID>` (numeric ID user must look up on recreation.gov first) | Named search/map browsing across multiple reservation systems (Recreation.gov, ReserveCalifornia, more) | Named RecArea typeahead inside our own UI — closes camply's "look up the ID yourself" gap without building CampFlare's full multi-provider scope |
+| Result scope per search | All facilities under the given RecAreaID (no explicit cap documented) | Effectively unbounded across providers, backed by their own infra checking every ~45s | Capped fan-out (~25 facilities/watch) to respect this project's single-user, courtesy-rate-limited, cron-based architecture |
+| Site-type / campsite filtering | Yes, via campsite equipment/site-type filters | Yes, via alert criteria | Reuse existing v1.0 site-type filter, apply across the expanded facility list |
+| Watch/alert management | CLI flags only, no persistent UI (config file / re-run CLI) | Full hosted UI (app + web) | This milestone's core ask: bring camply's capability into a UI, at CampFlare's usability level, scoped to Recreation.gov only (per PROJECT.md's explicit out-of-scope: other booking sites deferred) |
+| Notification channel | Email, Pushover, Pushbullet, Telegram | Email, text, webhook | Stay email-only per existing constraint; no change needed for this milestone |
 
 ## Sources
 
-- [Campnab FAQ — scan tiers, dedup behavior, pricing, polling frequency](https://campnab.com/faq) — MEDIUM confidence (vendor-published FAQ, not independently verified against actual system behavior)
-- [Outdoorithm — Free Campsite Cancellation Alerts, Campnab/CampFlare alternatives (2026)](https://outdoorithm.com/campground-alerts) — MEDIUM confidence, current-year source
-- [Happiest Outdoors — Campnab vs. Schnerp cancellation app comparison](https://happiestoutdoors.ca/camping-cancellation-apps/) — MEDIUM confidence, third-party comparison
-- [Backpacking Light forum — campsite availability notifications discussion](https://backpackinglight.com/forums/topic/campsite-availability-notifications-in-recreation-gov/) — LOW confidence, community anecdote, useful for pain points (e.g. recreation.gov's native 3-campground alert limit)
-- [GitHub — juftin/camply](https://github.com/juftin/camply) — MEDIUM-HIGH confidence, open-source, notification channel list directly verifiable from repo
-- [GitHub — banool/recreation-gov-campsite-checker](https://github.com/banool/recreation-gov-campsite-checker) — MEDIUM confidence, open-source reference implementation of API-based (not scraping) availability checking, cron-driven pattern
-- [KQED — "Why Can't You Get That Camping Spot?" (bots controversy)](https://www.kqed.org/news/11450483/cant-get-that-camping-spot-it-could-be-bots) — MEDIUM confidence, supports the anti-feature rationale against auto-booking
-- [recbot.site — free desktop scanner, explicitly notify-only positioning](http://recbot.site/) — LOW confidence, single vendor page, but reinforces industry norm of "notify, don't auto-book"
+- [camply GitHub (juftin/camply)](https://github.com/juftin/camply) — primary reference for `--rec-area` search pattern and RecArea/Facility/Campsite hierarchy
+- [camply Command Line Usage docs](https://juftin.com/camply/command_line_usage/)
+- [camply Recreation.gov provider docs](https://juftin.com/camply/recreationdotgov/)
+- [recgov_daemon GitHub (rmjacobson/recgov_daemon)](https://github.com/rmjacobson/recgov_daemon) — lat/long + radius search variant, and note on blank lat/long fields in RIDB data
+- [Campflare homepage](https://campflare.com/) and [Campflare API/Help pages](https://campflare.com/api) — competitor UX for hosted, multi-provider alerting
+- [Free Campsite Tracker Alternatives to Campnab](https://campnab.com/blog/free-campsite-tracker-alternatives-to-campnab) — landscape overview of competing tools
+- Project's own `.planning/PROJECT.md` — existing v1.0 architecture, constraints (rate limits, single-user, notify-only, dashboard read-only-so-far), and stated tech debt (validation duplication between src/ and dashboard/)
+
+**Confidence caveat:** RIDB endpoint parameter names (radius, query, pagination limits) were not verified against the primary RIDB Swagger/API doc directly (WebFetch on ridb.recreation.gov returned only the marketing homepage, not API docs). The RecArea → Facility hierarchy and the "named area over radius search" recommendation are corroborated by multiple independent community tools, so treat that conclusion as MEDIUM confidence; treat exact RIDB query-parameter names as needing verification during implementation (LOW confidence, verify against `https://ridb.recreation.gov/landing` API docs or the OpenAPI spec directly before coding the fan-out client).
 
 ---
-*Feature research for: Recreation.gov campsite availability watcher*
-*Researched: 2026-08-16*
+*Feature research for: Area-based campground search + watch-management UI (Campground Crawler v1.1)*
+*Researched: 2026-08-25*

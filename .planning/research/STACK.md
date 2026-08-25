@@ -1,173 +1,153 @@
 # Stack Research
 
-**Domain:** Scheduled polling + transactional email notification service (single-user, no UI)
-**Researched:** 2026-08-16
-**Confidence:** MEDIUM-HIGH (deployment/scheduling and email findings are HIGH confidence, verified against current docs/changelogs; the campsite-availability data source itself is MEDIUM confidence because the only endpoint that returns real per-day availability is undocumented)
+**Domain:** Adding area-based campground search + a watch-management UI to an existing zero-database, static-JSON-in-git Node/Next.js app
+**Researched:** 2026-08-25
+**Confidence:** MEDIUM-HIGH (RIDB geo-search params verified via multiple independent community sources + live 401 probe confirming auth requirement; GitHub Contents API mechanics HIGH — well-documented, stable API; exact RIDB field/activity-code list is MEDIUM, not independently confirmed against a live authenticated response in this session)
 
 ## Recommended Stack
 
-### Core Technologies
+### Core Technologies — no new frameworks needed
+
+This milestone does **not** need a new runtime, database, or hosting platform. Both requested capabilities extend the existing two projects (`src/` poller, `dashboard/` Next.js app) using their existing tech (RIDB REST API, Next.js Route Handlers, GitHub REST API). Resist the urge to add a database, ORM, or auth framework — the zero-backend architecture (D-04, D-03) still holds; it just grows one more integration point (GitHub Contents API for writes) alongside the existing one (raw.githubusercontent.com for reads).
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| Node.js | 22.x LTS (24.x LTS also fine) | Runtime for the poller script | Matches GitHub Actions' default `ubuntu-latest` runner tooling, first-class `fetch`, no build step needed for a script this small. HIGH confidence. |
-| TypeScript | 5.7+ | Type safety for API response shapes, watch config | RIDB/undocumented availability responses are easy to get wrong (nested date maps, enum-like status strings); types catch this at edit time instead of 3am when a watch silently stops matching. HIGH confidence. |
-| tsx | 4.x | Run TypeScript directly in CI without a compile step | Simplest way to execute a `.ts` script inside a GitHub Actions job — no `tsc` build artifact to manage for a script-only project. HIGH confidence. |
-| GitHub Actions (`schedule` trigger) | n/a (hosted) | Recurring job runner ("every few minutes") | See full comparison below — this is the deployment recommendation. HIGH confidence. |
-| Resend | `resend` npm package (current major: 6.x, e.g. `resend@6.20.0`) | Transactional email delivery | Best-in-class DX for a single triggered email per event, generous free tier (3,000 emails/mo, 100/day), official typed Node SDK, minutes to set up. HIGH confidence. |
+| RIDB Facilities API (`GET /facilities`) with `latitude`/`longitude`/`radius`/`activity`/`state` params | v1 (existing `RIDB_BASE`) | Area/region campground search | Same endpoint the poller already calls for name-based `resolveFacility` (`src/recreation-gov/client.ts`) — geo params are additive query-string filters on the identical endpoint, no new API surface, no new auth model (same `RIDB_API_KEY` already required and already wired) |
+| GitHub REST Contents API (`PUT /repos/{owner}/{repo}/contents/{path}`) via plain `fetch` | GitHub REST API v3 (current, stable) | Durable write-back of `watches.json` from the dashboard | Matches the existing "raw fetch, no SDK" convention (`dashboard/lib/github.ts` already hand-rolls fetch for reads) — a single PUT with base64 content + the file's current `sha` is all that's needed; avoids pulling in an SDK for one call type |
+| Next.js Route Handler (`dashboard/app/api/watches/route.ts`) | Next.js 16.3.2 (already installed) | Server-side endpoint that validates a watch, fetches current `watches.json` + its `sha` from GitHub, and PUTs the updated array | Runs server-side on Vercel, so the GitHub write token never reaches the browser — this is the one piece of server logic the dashboard doesn't have today, but it's a Route Handler, not a new backend service |
+| Next.js Middleware (`dashboard/middleware.ts`) with HTTP Basic Auth backed by env vars | Next.js 16.3.2 (built-in) | Gate the new write paths so a public dashboard can't be used by strangers to rewrite your `watches.json` | Zero new dependencies, zero cost, appropriate for a single named user — see Security section below for why NextAuth/Clerk/etc. would be over-engineering here |
 
 ### Supporting Libraries
 
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| `zod` | 3.x / 4.x | Validate watch config (env vars / JSON file) and RIDB/availability API responses at runtime | Always — config typos and upstream API shape drift are the two most likely silent-failure modes for this project. |
-| `dotenv` | 16.x | Load `.env` for local dev only | Local development runs; not needed in GitHub Actions (use encrypted repo Secrets instead). |
-| `p-limit` | 6.x | Cap concurrent outbound requests when polling multiple watches/campgrounds | Only if a user configures many watches (5+) hitting the availability endpoint in the same run — keeps you under the informal ~1 req/sec courtesy limit (see Pitfalls). |
-| `date-fns` (or plain `Intl`) | 4.x | Date-range math for watches (nights, month boundaries) | The availability endpoint is queried per-calendar-month, so watches spanning month boundaries need 2+ fetches — a date library keeps that logic readable. |
+| `zod` | `^4.4.3` (already a dependency in both `src/` and `dashboard/`) | Validate the new watch-creation payload (area params, date range, site type) server-side before writing to GitHub | Extend the existing `WatchSchema` (`src/config/schema.ts`) to accept an area descriptor instead of/alongside `facilityId` — reuse the pattern, don't invent a second validation approach |
+| `react-hook-form` | `^7.71.0` | Manage the create/edit watch form (area picker, date range, site type) in the dashboard | Only if the form grows past a handful of trivial controlled inputs — a park/state select, two date inputs, and a site-type select can also just be plain controlled `useState` with no library at all; add this only if the form gets messier than that (e.g. dynamic facility-list preview, inline validation errors per field) |
+| None (no map library) | — | Area selection | See "What NOT to Use" — a lat/long+radius or state/park-name picker does not need Leaflet/Mapbox/Google Maps for a single-user tool; keeps bundle small and avoids a third-party API key |
 
 ### Development Tools
 
 | Tool | Purpose | Notes |
 |------|---------|-------|
-| GitHub encrypted Secrets | Store `RECREATION_GOV_API_KEY` (optional), `RESEND_API_KEY`, `NOTIFY_EMAIL`, watch config | Set via repo Settings → Secrets and variables → Actions. Never commit these. |
-| GitHub Actions `concurrency` group | Prevent overlapping runs if a job takes longer than the schedule interval | Set `concurrency: { group: poller, cancel-in-progress: false }` on the workflow so a slow run doesn't race a new one and corrupt the state file. |
-| ESLint + Prettier (optional) | Basic lint/format | Not load-bearing for a script this size, but cheap to add if you want CI to fail fast on obvious mistakes. |
+| `scripts/capture-fixtures.ts` (existing) | Capture a real `GET /facilities?latitude=...&longitude=...&radius=...` response once a `RIDB_API_KEY` is available in the dev environment | The current `ridb-facilities.json` fixture is synthetic/unvalidated per `src/recreation-gov/fixtures/README.md` — re-run this script for the geo-search shape specifically before trusting field names like `FacilityLatitude`/`FacilityLongitude` in code |
+| GitHub fine-grained Personal Access Token (repo-scoped) | Auth for the dashboard's write-back to `watches.json` | Create at github.com Settings → Developer settings → Fine-grained tokens; scope to this one repository only, `Contents: Read and write` + `Metadata: Read`, set an expiration and rotate it — store as a Vercel encrypted environment variable, never in the repo |
+
+## RIDB Area/Region Search — Verified Shape
+
+The RIDB Facilities endpoint (`GET https://ridb.recreation.gov/api/v1/facilities`) the poller already calls for name resolution supports geo-filtering as additional query params on the same endpoint (confirmed via multiple independent community client wrappers, e.g. `node-ridb`, and cross-referenced against the official recreation.gov developer docs description):
+
+```
+GET /api/v1/facilities
+  ?latitude=36.5054
+  &longitude=-118.5658
+  &radius=50          # miles
+  &activity=9          # 9 = Camping (community-documented; verify against GET /activities)
+  &state=CA             # optional, alternative/additional filter
+  &query=...             # optional free-text, same param the poller already uses
+  &limit=50
+  &offset=0
+```
+
+- **Auth:** confirmed live in this session — an unauthenticated `GET /facilities` request returns `HTTP 401 {"error":"Unauthorized Access"}`. The project already requires `RIDB_API_KEY` for name-based resolution (`.env.example`), so this is not a new constraint — geo search rides the same key.
+- **Response envelope:** same `{ RECDATA: [...], METADATA: {...} }` shape the poller's `RidbFacilitySearchSchema` already parses — geo search returns `Facility` objects, so extending `types.ts`'s existing schema (rather than writing a new one) should work, but re-verify `FacilityLatitude`/`FacilityLongitude`/`FacilityID`/`FacilityName` fields are present in a live geo response before shipping (MEDIUM confidence — the base facility shape is validated in production today, but the append-on geo query hasn't been fixture-captured).
+- **Activity codes:** `GET /activities` (undocumented in depth here, MEDIUM confidence) lists activity codes; camping is commonly `9` per community tooling. Recommend calling `GET /activities?query=camping` once with a real key and hardcoding the confirmed ID as a constant, rather than making it a runtime lookup.
+- **Multiple results → multiple facility IDs:** an area watch will resolve to N facility IDs instead of 1. This is the core integration point into the existing pipeline — `fetchAvailabilityForRange` already takes a single `facilityId`; an area watch needs to loop it across N facilities, respecting the same ~1 req/sec pacing (now more important with more facilities per watch — budget accordingly against the 5-minute cron window: N facilities × M months × 1 req/sec must comfortably fit inside 300s, per watch, times however many watches run per cycle).
+
+## Writing `watches.json` Back to GitHub — No Database Needed
+
+**Recommendation: GitHub REST Contents API via a Next.js Route Handler + fine-grained PAT.** Do not add Vercel KV, Vercel Postgres, or any database for this. Rationale:
+
+1. **The poller only ever reads `watches.json` from a committed file in the repo it checks out** (`src/config/watches.ts` loads it from the working directory GitHub Actions already checked out). If the dashboard wrote to a separate store (KV/Postgres), you'd need to either (a) sync that store back into the repo before every poll run — extra moving parts and a new failure mode — or (b) change the poller to fetch config from a different source at runtime, which is a bigger, riskier change to a component that's currently validated and stable. Writing directly to the same file via the same repo keeps the poller's read path completely untouched.
+2. **The Contents API write is a two-call, no-SDK operation:**
+   - `GET /repos/{owner}/{repo}/contents/watches.json` → returns current content + `sha`
+   - `PUT /repos/{owner}/{repo}/contents/watches.json` with `{ message, content: base64(newJson), sha, branch: "main" }` → commits and pushes in one call
+   This matches the project's existing "hand-roll fetch, no SDK" convention in `dashboard/lib/github.ts` (which explicitly reads raw content instead of pulling in `@octokit/rest` for reads) — do the same for writes. Only reach for `@octokit/rest` (`^22.0.1`) if you want built-in retry/pagination/typed responses and are fine with the extra dependency; it is not required for a single-file PUT.
+3. **Concurrency is safe as currently designed:** the poller (GitHub Actions, `[skip ci]` commit) writes `state.json`/`runs.json`; the dashboard would write `watches.json`. Different files, so there's no merge conflict at the git level — GitHub's Contents API performs a tree-level merge server-side keyed on the target file's own `sha`, not the branch HEAD, so a poller commit landing between the dashboard's GET and PUT does not cause the dashboard's write to fail. No optimistic-locking retry loop is strictly required, but returning a clear "someone else edited watches.json, reload and retry" error on a `409`/sha-mismatch response is good practice and cheap to add.
+4. **No workflow-trigger loop risk:** `poll.yml` only triggers on `schedule`/`workflow_dispatch`, not on `push`, so a dashboard-driven commit to `watches.json` will not recursively trigger anything.
+
+### Auth token choice: fine-grained PAT, not a GitHub App
+
+| Option | Verdict | Why |
+|--------|---------|-----|
+| **Fine-grained PAT**, scoped to this one repo, `Contents: read/write` + `Metadata: read` | **Recommended** | Single user, single repo, no installation flow, no webhook handling, no private-key management — a fine-grained PAT is the minimum-ceremony option that still follows least-privilege (repo-scoped, not account-wide like a classic PAT). Set an expiration and put a calendar reminder to rotate it; GitHub caps fine-grained PATs at 50 per account, irrelevant here. |
+| GitHub App (installation token) | Overkill | Built for multi-repo/multi-org automation or public integrations distributed to other users' repos — none of which applies to a single-user personal tool committing to its own repo. Adds installation/private-key/JWT-signing complexity with no corresponding benefit here. |
+| `GITHUB_TOKEN` (Actions-native) | Not usable | Only exists inside a GitHub Actions run; the dashboard runs on Vercel, a separate execution context with no access to that token. |
+
+Store the PAT as a Vercel encrypted environment variable (e.g. `GITHUB_WRITE_TOKEN`), read only inside the Route Handler (server-side), and never expose it to a Client Component — mirror the "never read a credential in a module that could leak it" discipline already established in `src/recreation-gov/client.ts`'s doc comment.
+
+### Auth for the write UI itself: gate it, don't leave it open
+
+The dashboard is currently public and read-only by design (D-03/D-04 — no auth needed because it can't mutate anything). Adding a write path changes that risk profile: **anyone who finds the dashboard URL could otherwise rewrite your `watches.json`** (spam it, point it at unrelated campgrounds, or wipe it) using your repo-write credential on your behalf if the endpoint isn't gated.
+
+**Recommendation: Next.js Middleware with HTTP Basic Auth backed by two env vars** (`DASHBOARD_USER`, `DASHBOARD_PASSWORD`), applied to the watch-management page and its API routes only (leave the existing read-only status views public, unchanged). This is standard, built into Next.js (no dependency), costs nothing, and matches the "single named user, not a multi-tenant product" scope explicitly stated in `.planning/PROJECT.md` ("no auth system — credentials/config live in environment variables").
+
+**What NOT to reach for:** NextAuth.js/Auth.js, Clerk, or any OAuth-based auth provider. Those solve session management, multiple identity providers, and multi-user account systems — none of which this project has or needs (see PROJECT.md "Out of Scope: Multi-user support / accounts / login"). They'd add a database or JWT-session layer and a new class of config (callback URLs, provider secrets) to protect a form only one person will ever use.
+
+If Basic Auth's plaintext-over-the-wire nature (mitigated only by HTTPS, which Vercel provides by default) is a concern, a slightly stronger alternative with the same "no new dependency" property is a signed cookie set by a simple password-check Route Handler (`Set-Cookie` with an HMAC'd value, checked in `middleware.ts`) — worth it only if Basic Auth's UX (browser-native prompt, no logout) becomes annoying in practice.
 
 ## Installation
 
 ```bash
-# Core
-npm install resend zod
+# dashboard/ — no new runtime dependency required for the GitHub write path
+# (plain fetch + Buffer.from(...).toString('base64') covers it)
 
-# Dev / runtime helpers
-npm install -D typescript tsx @types/node
+# Optional, only if you want SDK ergonomics over raw fetch for GitHub writes:
+npm install @octokit/rest
 
-# Optional, only if you have many watches or want date-range helpers
-npm install date-fns p-limit
+# Optional, only if the watch-creation form outgrows plain useState:
+npm install react-hook-form
+
+# No new dependency needed for area search — extends existing src/recreation-gov/client.ts
 ```
-
-## The Data Source: RIDB vs. the actual availability endpoint
-
-This is the most important finding of this research and directly shapes the architecture:
-
-**RIDB (Recreation Information Database) API** — `https://ridb.recreation.gov/api/v1/` — is the *official, documented* API. It covers facility/campground/campsite **metadata** (names, IDs, locations, amenities) across NPS, USFS, BLM, USACE, BOR, and FWS. An API key is optional (free, self-serve at recreation.gov/use-our-data) and only raises rate limits — it is not required for basic metadata lookups. **Confidence: HIGH** (official docs).
-
-**RIDB does not expose real-time per-day campsite availability.** The actual "is site X open on date Y" data comes from an **undocumented internal endpoint** that recreation.gov's own website JavaScript calls:
-
-```
-GET https://www.recreation.gov/api/camps/availability/campground/{campground_id}/month?start_date=YYYY-MM-01T00:00:00.000Z
-```
-
-This returns, per campsite, a map of date → status (`Available`, `Reserved`, `Not Available`, etc.) for that calendar month. It is the endpoint used by essentially every community campsite-availability tool (`camply`, `recreation-gov-campsite-checker`, `recgov_daemon`, and the various Apify scrapers). **Confidence: MEDIUM** — verified through multiple independent open-source implementations and community write-ups, not through official Recreation.gov documentation, because none exists for this endpoint. Treat it as stable-but-unofficial: it has been consistent for years, but Recreation.gov could change or block it without notice.
-
-**Practical implications for the roadmap:**
-- Use RIDB (documented, official) to resolve a human-entered park/campground name to a `campground_id` — do this once, not on every poll.
-- Use the undocumented `/api/camps/availability/campground/{id}/month` endpoint for the actual polling loop.
-- Send a realistic browser `User-Agent` header on requests to the availability endpoint — requests with generic HTTP-library user agents are the most commonly reported cause of 403s in community trackers.
-- Respect an informal ~1 request/second pace and keep concurrent requests low; the community norm for personal-use polling is roughly every 5 minutes per campground, not tighter. This project's "every few minutes" cadence fits that norm — going much tighter (e.g. every 30s across many campgrounds) risks getting blocked.
-- No official rate-limit numbers are published for the unofficial endpoint (there wouldn't be — it's not a public API). Design the poller to back off and log on non-200s rather than retry aggressively.
-
-## Deployment/Scheduling Recommendation: GitHub Actions over Vercel Cron
-
-This was the central open question and the research gives a clear answer.
-
-**Recommendation: GitHub Actions scheduled workflow (`on: schedule`).**
-
-| Option | Verdict | Why |
-|--------|---------|-----|
-| **GitHub Actions scheduled workflow** | ✅ Recommended | Minimum interval is 5 minutes (matches "every few minutes" requirement exactly). Free and effectively unlimited on a **public** repo; on a private repo, free tier is 2,000 Linux minutes/month — a ~30–60s script run every 5 min is ~2,600–5,200 min/month, which **exceeds the private-repo free tier**. Two fixes: (a) make the repo public (config lives in GitHub Secrets, not the repo, so no credentials are exposed) and get unlimited minutes, or (b) poll every 10–15 min instead of 5 to stay within the private-repo budget. Either way, zero servers to manage, and state can be persisted by committing a file back to the repo (see Persistence below). |
-| **Vercel Cron (Hobby/free plan)** | ❌ Not viable | Hobby plan caps cron jobs at **once per day**, with timing only guaranteed within the hour. This directly fails the "every few minutes" requirement — confirmed via Vercel's own docs/changelog. |
-| **Vercel Cron (Pro plan)** | ⚠️ Viable but costs money for no added benefit | Pro plan supports per-minute cron cadence. Works, but costs $20/month minimum for a single-user hobby project that GitHub Actions does for free. Only makes sense if the user already pays for Vercel Pro for other reasons and wants everything in one dashboard. |
-| **Self-hosted node-cron (always-on process)** | ❌ Not recommended for v1 | Requires a server/VPS that's always running (Fly.io, Railway, a Raspberry Pi, etc.) — adds real infrastructure (uptime, restarts, OS patching) for a workload that a free hosted scheduler already solves. Only reconsider if polling needs get much more frequent (sub-minute) or stateful in ways serverless can't support. |
-
-**Bottom line:** GitHub Actions is free, requires no infrastructure, matches the required polling cadence natively (5-min minimum granularity vs. Vercel Hobby's 1-day minimum), and the project already needs a git repo for config/code — there's no separate platform to provision. Vercel's Hobby tier is disqualified by its cron frequency floor; Vercel Pro works but costs money the project doesn't need to spend.
-
-**Caveat (MEDIUM confidence):** GitHub Actions scheduled workflows are best-effort, not real-time — community reports document 5–30 minute delays during peak GitHub load, and (rarely) a scheduled run can be silently skipped entirely under queue pressure. For a "grab it before someone else does" use case this matters somewhat, but it's a tradeoff every free scheduler shares (Vercel Hobby is far worse — 1x/day). If reliability becomes a real problem in practice, the mitigation is upgrading to a paid, guaranteed scheduler (Vercel Pro cron, or a dedicated cron-monitoring service that pings the workflow) rather than switching architectures.
-
-## Transactional Email: Resend
-
-**Recommendation: Resend**, via the official `resend` npm package.
-
-- **Free tier:** 3,000 emails/month, capped at 100/day, one verified sending domain. Vastly more than a single-user watch-notification tool needs (even checking every 5 minutes across several watches, actual *notification* emails — only sent on new matches — will be a tiny fraction of poll runs).
-- **Setup basics:**
-  1. Sign up at resend.com, verify a sending domain (or use their shared testing domain for initial dev) via DNS records (SPF/DKIM).
-  2. Generate an API key, store as `RESEND_API_KEY` in GitHub Actions Secrets.
-  3. `npm install resend`, then:
-     ```ts
-     import { Resend } from 'resend';
-     const resend = new Resend(process.env.RESEND_API_KEY);
-     await resend.emails.send({
-       from: 'watcher@yourdomain.com',
-       to: process.env.NOTIFY_EMAIL!,
-       subject: 'Campsite available: <site name>',
-       text: '...',
-     });
-     ```
-  4. No SMTP server, no queue infrastructure — a single synchronous API call per notification, well suited to a short-lived Actions job.
-- Confidence: HIGH — verified via npm package page (current major v6.x) and Resend's own docs/changelog for 2026 feature set and pricing.
-
-## Minimal Persistence: Avoiding Duplicate Notifications
-
-The project needs to remember "have I already emailed about this specific opening?" across runs. Given the GitHub Actions recommendation, the simplest options, in order of preference:
-
-1. **Commit a small JSON state file back to the repo after each run** (recommended for v1).
-   - The workflow, after checking availability and sending any emails, writes a `notified-state.json` (e.g. `{ "campgroundId:campsiteId:date": timestampNotified }`) and does a `git commit` + `git push` as the final step using the built-in `GITHUB_TOKEN`.
-   - Zero external services, zero extra credentials, fully inspectable/auditable via git history, works within the free GitHub Actions minutes already budgeted.
-   - Tradeoffs: adds a commit to the repo on every run that has state changes (fine — can prune/squash later, or `.gitignore` the file's history noise isn't a real cost for a personal tool); requires the `concurrency` guard mentioned above to avoid two overlapping runs both trying to push.
-2. **Upstash Redis (free tier), accessed via REST API** — reasonable alternative if the git-commit approach feels awkward.
-   - Serverless-friendly (HTTP-based, no persistent connection), generous free tier (500K commands/month far exceeds this project's needs), works identically whether the poller runs in GitHub Actions or Vercel.
-   - Adds one more external service/credential vs. option 1's zero-additional-infra approach — only worth it if the project later grows beyond a single JSON blob's worth of state.
-3. **SQLite file / local database** — ❌ not viable as the sole store. GitHub Actions runners (and Vercel serverless functions) are ephemeral — nothing written to local disk survives past the end of the run unless explicitly persisted elsewhere (git commit, external DB, or a cache action). Only useful as an in-memory/scratch structure during a single run, not for cross-run dedupe state.
-
-**Recommendation: option 1 (commit JSON state to the repo)** for v1 — it requires no new accounts, no new secrets, and is trivially debuggable (state history is git history). Revisit Upstash Redis only if commit-noise or race conditions become an actual problem.
 
 ## Alternatives Considered
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|--------------------------|
-| GitHub Actions scheduled workflow | Vercel Cron (Pro plan, $20/mo) | User already pays for Vercel Pro and wants scheduling/deploys/logs unified in one dashboard; willing to spend $20/mo for guaranteed per-minute cadence and better run-time guarantees than GH Actions' best-effort scheduler. |
-| GitHub Actions scheduled workflow | Always-on VPS + node-cron/PM2 | Polling needs to go sub-minute, or the project grows to need a long-running process (e.g. websocket/stream-based checking) that a short-lived scheduled job architecture can't support. |
-| Commit JSON state file to repo | Upstash Redis (free tier) | Commit-based state starts to feel noisy/racy, or state needs to be shared with a future web UI/dashboard outside of git. |
-| Resend | Amazon SES | Already deep in AWS infra and want to minimize vendor count; SES is cheaper at high volume but has rougher DX (manual DKIM/domain verification, sandbox mode by default) — not worth the setup friction for a low-volume single-user tool. |
-| Resend | SendGrid | Legacy choice with more enterprise features; DX and free-tier generosity are worse than Resend for this scale of project — no reason to choose it new in 2026 for a project this size. |
+| GitHub Contents API write-back (same repo, same file) | Vercel KV / Vercel Postgres as the watch store | Only if you're willing to also change the poller to read watches from that store instead of the checked-out repo file — a bigger architectural change than this milestone needs, and it reintroduces the "who's the source of truth" question the current design deliberately avoids |
+| Plain `fetch` to GitHub Contents API | `@octokit/rest` | If you want typed responses, built-in retry/backoff, or plan to add more GitHub operations later (e.g. reading commit history in the UI) — the marginal dependency cost is low, but it's not needed for one PUT call |
+| Next.js Middleware + Basic Auth | Auth.js / Clerk / a real login system | If this ever becomes multi-user (explicitly out of scope per PROJECT.md) or you want passwordless/2FA — not justified for a single named user today |
+| Lat/long+radius or state/park-name text picker (no map) | `react-leaflet` / Mapbox GL / Google Maps JS API | If area selection needs visual "draw a circle on a map" UX rather than typing a place name or coordinates — adds a mapping API key, CSS/tile-loading complexity, and bundle weight; only justified if usability testing shows the text/coordinate picker is confusing for this user |
 
 ## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|--------------|
-| Vercel Cron on the Hobby (free) plan | Hard-capped at once/day, with only hour-level timing precision — cannot satisfy an "every few minutes" polling requirement at all, regardless of code quality. | GitHub Actions `schedule` trigger (5-min minimum granularity, free). |
-| Web scraping recreation.gov's rendered HTML/booking pages directly (e.g. headless browser automation) | Far more fragile than calling the same JSON endpoint the site's own frontend calls; heavier (needs a browser runtime), slower, and more likely to trip anti-bot defenses than a plain `fetch` with a realistic User-Agent. Also explicitly what the project's own constraints want to avoid ("must use official/public API rather than scraping HTML"). | Direct `fetch` calls to RIDB (metadata) + the availability JSON endpoint (per-day status), which is what the project's data actually needs. |
-| SQLite/local file as the *only* persistence layer on a serverless or Actions-runner deployment | Ephemeral compute — local disk writes vanish at the end of every run, so "already notified" state silently resets and users get duplicate/spam emails on every single run. | Commit state back to the git repo (v1) or Upstash Redis (if it grows). |
-| A generic SMTP library (e.g. Nodemailer) against a personal Gmail account | Personal Gmail SMTP is rate-limited, prone to being flagged as spam/suspicious sign-in, and not designed for programmatic sending — brittle for an unattended service that must reliably deliver time-sensitive alerts. | Resend (or any dedicated transactional email API) with a verified sending domain. |
+| Vercel KV/Postgres/any database for watch storage | Reintroduces a second source of truth the poller doesn't read from; the poller only reads the repo's checked-out `watches.json` | GitHub Contents API write-back to the same file the poller already reads |
+| A GitHub App with an installation flow | Solves multi-repo/multi-tenant distribution problems this single-user, single-repo tool doesn't have | A repo-scoped fine-grained PAT |
+| NextAuth.js/Clerk/OAuth providers | Built for multi-user session/identity management; adds a database or JWT layer for a problem (one person, one password) that doesn't need it | Next.js Middleware + HTTP Basic Auth via env vars |
+| A JS mapping library (Leaflet/Mapbox/Google Maps) for area selection | New third-party API key/cost/bundle weight for a capability (pick a park or region) that a text search or lat/long input already covers via RIDB's own `query`/`state`/`latitude`/`longitude` params | RIDB's own text/geo query params, surfaced as plain form inputs |
+| Classic (non-fine-grained) GitHub PAT | Account-wide scope (every repo you own) for a single-repo write need — violates least privilege | Fine-grained PAT scoped to this one repository |
 
 ## Stack Patterns by Variant
 
-**If the user already pays for Vercel Pro for other projects:**
-- Use Vercel Cron (per-minute cadence) + a Vercel KV/Upstash-backed state store instead of GitHub Actions.
-- Because the marginal cost is $0 (already paying) and it consolidates deploys/logs/cron in one dashboard, with better timing guarantees than GH Actions' best-effort scheduler.
+**If the RIDB geo response omits lat/long on some facilities (known RIDB data-quality gap per community sources):**
+- Filter out facilities missing `FacilityLatitude`/`FacilityLongitude` from the area-search result set before presenting them in the UI, and log/skip them the same defensive way `resolveFacility` already handles a missing `first` result (`FacilityNotFoundError`)
+- Because an area watch may still legitimately resolve to a facility list where a few entries have incomplete metadata but valid availability data — don't let one bad record fail the whole watch
 
-**If watch count grows large (dozens of campgrounds) or polling needs to tighten below 5 minutes:**
-- Move off GitHub Actions' scheduled-workflow model entirely toward an always-on lightweight worker (e.g. Fly.io machine, Railway cron/worker) running `node-cron` or a simple `setInterval` loop.
-- Because GitHub Actions' 5-minute schedule floor and per-run cold-start overhead become limiting factors, and a long-running process can rate-limit/queue requests more gracefully across many watches.
+**If the number of facilities in a matched area is large (e.g. "all campgrounds in Yosemite" could be dozens):**
+- Cap the facility count per area watch (e.g. top N by name-match relevance or by proximity) to keep the ~1 req/sec pacing from blowing the 5-minute cron budget — surface the cap in the UI ("showing closest 10 campgrounds") rather than silently truncating server-side only in the poller
 
 ## Version Compatibility
 
 | Package A | Compatible With | Notes |
 |-----------|------------------|-------|
-| `resend@6.x` | Node.js 18+ (Node 22/24 recommended) | Uses native `fetch`; no extra HTTP client needed. |
-| `tsx@4.x` | Node.js 18+ | Used only to execute the script in CI; no bundling/build step required for a single-file or small-module poller. |
-| GitHub Actions `ubuntu-latest` runner | Node.js pinned via `actions/setup-node` | Pin an explicit Node version (e.g. `node-version: '22'`) rather than relying on the runner's default, since the default image's bundled Node version changes over time. |
+| Next.js 16.3.2 | Route Handlers + Middleware (both built-in, no version bump needed) | Already installed in `dashboard/package.json`; no upgrade required for this milestone |
+| `zod@^4.4.3` | Existing `WatchSchema` in `src/config/schema.ts` | Extend, don't replace — add an area-descriptor variant (e.g. `area: { latitude, longitude, radiusMiles }` or `area: { parkName }`) as an alternative to today's single optional `facilityId`, keeping `facilityId` as a still-valid escape hatch for pinned watches |
+| `RIDB_API_KEY` (existing secret) | Both name-based `resolveFacility` and new geo search | Same key, same header (`apikey`), no new secret to provision — geo search is additive to the existing RIDB integration, not a new one |
+| GitHub fine-grained PAT | GitHub Actions' `GITHUB_TOKEN` used by `poll.yml` | Two separate credentials for two separate write paths (Actions writes `state.json`/`runs.json` via its ephemeral `GITHUB_TOKEN`; Vercel writes `watches.json` via the new long-lived PAT) — do not try to share one token across both, they have different lifetimes and threat models |
 
 ## Sources
 
-- Vercel Cron Jobs official docs (`vercel.com/docs/cron-jobs`, `vercel.com/docs/limits`) — Hobby once/day cap, Pro per-minute cadence, hour-level timing precision on Hobby. HIGH confidence.
-- Vercel changelog, "Cron jobs now support 100 per project on every plan" — per-project job count limits. HIGH confidence.
-- GitHub Actions official docs / community discussions on `schedule` trigger — 5-minute minimum interval, best-effort timing, occasional skipped runs under load. MEDIUM-HIGH confidence (behavior corroborated by multiple independent community reports, not just one source).
-- GitHub Actions pricing pages (cicdcalculator.com, cicdcost.com, github.blog changelog Dec 2025/Jan 2026) — public repos free/unlimited, private repos 2,000 free Linux minutes/month, Jan 2026 per-minute rate cuts. MEDIUM-HIGH confidence (consistent across multiple current sources).
-- RIDB API (`ridb.recreation.gov`) — official documented metadata API, optional API key only raises rate limits. HIGH confidence for existence/purpose; endpoint-level rate-limit numbers not independently confirmed from an official source in this pass — treat specific "requests/minute" figures as MEDIUM confidence pending a direct read of the RIDB developer portal.
-- Community open-source campsite-availability tools (`banool/recreation-gov-campsite-checker`, `juftin/camply`, `rmjacobson/recgov_daemon`) — corroborate the undocumented `www.recreation.gov/api/camps/availability/campground/{id}/month` endpoint pattern and the ~5-minute personal-use polling norm. MEDIUM confidence (multiple independent implementations agree, but no official documentation exists for this endpoint by nature).
-- Resend npm package page (npmjs.com/package/resend) and resend.com/changelog — current major version (6.x), free-tier limits (3,000/mo, 100/day). HIGH confidence.
+- Live probe (this session): unauthenticated `GET https://ridb.recreation.gov/api/v1/facilities?...` → `HTTP 401 {"error":"Unauthorized Access"}` — confirms RIDB geo search requires the same `RIDB_API_KEY` already used by the poller
+- `src/recreation-gov/client.ts`, `src/recreation-gov/fixtures/README.md`, `.env.example` (this repo) — confirms existing RIDB integration shape, existing auth requirement, and the fact that the facilities-search fixture is synthetic/unvalidated
+- `dashboard/lib/github.ts` (this repo) — confirms the existing "raw fetch, allowlisted files, no SDK" convention this research extends to writes
+- `.github/workflows/poll.yml` (this repo) — confirms the `schedule`/`workflow_dispatch`-only trigger (no push-loop risk) and the existing commit-back pattern for state files
+- WebSearch, multiple community RIDB client wrappers (`node-ridb`, `ships/ridb`) — MEDIUM confidence, cross-referenced across independent sources — for `latitude`/`longitude`/`radius`/`activity` query param names and the `activity=9` camping code (not independently re-verified against a live authenticated response in this session; flagged for fixture re-capture)
+- GitHub Docs (fine-grained PAT permission model, least-privilege guidance) — HIGH confidence, official source pattern well-established
+- GitHub REST API Contents endpoint (`PUT /repos/{owner}/{repo}/contents/{path}`) — HIGH confidence, stable, long-documented GitHub REST API behavior (base64 content + sha-based update, single-call commit+push)
+- `npm view` (this session): `@octokit/rest@22.0.1`, `octokit@5.0.5`, `next-auth@4.24.15` (latest), `next-auth@5.0.0-beta.32` (beta) — current versions noted for the "alternatives considered" table, not required by the primary recommendation
 
 ---
-*Stack research for: Recreation.gov campsite availability watcher (scheduled polling + email notification)*
-*Researched: 2026-08-16*
+*Stack research for: area-based campground search + watch-management UI on an existing zero-database static-JSON-in-git architecture*
+*Researched: 2026-08-25*

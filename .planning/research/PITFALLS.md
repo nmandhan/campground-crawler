@@ -1,230 +1,178 @@
 # Pitfalls Research
 
-**Domain:** Scheduled polling of a third-party (Recreation.gov) API + transactional email alerts, run unattended on serverless/cron infrastructure
-**Researched:** 2026-08-16
-**Confidence:** MEDIUM (Recreation.gov's undocumented "month availability" endpoint is well-covered by community tools like `camply` and `recreation-gov-campsite-checker`, but there is no official ToS/rate-limit doc for that specific endpoint — see notes below. RIDB metadata API rate limits are HIGH confidence.)
+**Domain:** Adding area-based Recreation.gov/RIDB search + a public write-back watch-management UI to an existing GitHub-Actions-cron + git-committed-JSON single-user tool
+**Researched:** 2026-08-25
+**Confidence:** MEDIUM-HIGH (rate limits and Contents API semantics verified via official docs/search; project-specific race/threat analysis is architectural reasoning from PROJECT.md, not third-party sources)
 
 ## Critical Pitfalls
 
-### Pitfall 1: Using the wrong Recreation.gov endpoint (RIDB vs. undocumented availability endpoint) and hitting a wall on real-time data
+### Pitfall 1: Area search blows the per-cycle request budget as watch count grows
 
 **What goes wrong:**
-Teams start with the official RIDB API (`ridb.recreation.gov/api/v1`) because it's documented and has a free API key, then discover it does not expose live per-site, per-night availability — it only has facility/campsite metadata (names, IDs, amenities, GPS). Real-time availability comes from a separate, undocumented JSON endpoint (`www.recreation.gov/api/camps/availability/campground/{id}/month?start_date=...`) that every community tool (`camply`, `banool/recreation-gov-campsite-checker`) actually uses. This endpoint has no published ToS, no published rate limit, no versioning guarantee, and can change shape without notice.
+v1.0's rate posture ("~1 req/sec, no aggressive retries") was sized for one `GET .../availability/campground/{id}/month` call per watch. An area watch resolves to N campgrounds in a region (a "Sequoia NF" or "Yosemite" region can easily be 20-50+ facilities). If the poller expands each area watch into one availability call per campground per 5-minute cycle, a handful of area watches multiplies request volume 20-50x, both against the undocumented availability endpoint (no published rate limit — the "~1 req/sec" convention is community-derived courtesy, not an enforced SLA) and against RIDB itself (verified: RIDB enforces 50 requests/minute per API key on `ridb.recreation.gov`). Blowing through either risks IP/key throttling or a ban that kills the *entire* tool, not just the area feature.
 
 **Why it happens:**
-The official-looking, documented RIDB API is the obvious starting point, but it doesn't cover the actual use case (live availability). Developers only discover the real endpoint via reverse-engineering the recreation.gov website network traffic or copying it from open-source projects.
+The mental model "one watch = one API call" from v1.0 doesn't hold once a watch can mean "many campgrounds." It's easy to naively loop `for each campground in area: fetch availability` without re-deriving a request budget.
 
 **How to avoid:**
-Use RIDB only for static facility/campsite lookup (resolving human-readable park names to facility IDs, listing campsite IDs within a campground). Use the `/api/camps/availability/campground/{id}/month` endpoint for live availability, treat it as an unofficial/undocumented dependency, and isolate it behind an adapter/interface so a schema change or endpoint swap only requires touching one module.
+- Resolve area → facility-ID list once via RIDB (cacheable, changes rarely) and cache it (e.g., re-resolve daily, not every poll cycle) rather than re-querying RIDB search on every 5-minute run.
+- Cap facilities-per-area-watch (e.g., hard limit of 10-15) and/or de-duplicate facility IDs across overlapping area watches so the same campground isn't polled twice in one cycle.
+- Stagger/batch availability calls with an explicit per-cycle request cap and a real minimum inter-request delay (not just "try to average ~1/sec" — literally `await sleep()` between calls), and fail closed (skip remaining campgrounds this cycle, pick up next cycle) rather than burst-retrying on failure.
+- Consider polling area watches on a slower cadence than pinned single-campground watches (e.g., every 15-30 min instead of every 5) since area search is inherently lower-precision/lower-urgency than a pinned watch.
 
 **Warning signs:**
-Availability checks return empty/malformed data with no RIDB error; response JSON shape differs from what example code expects; site suddenly returns HTML instead of JSON (usually means blocked or redirected).
+Run history (`runs.json`) showing cycle duration climbing toward or past the 5-minute cron interval; availability-endpoint calls starting to return errors/429s/empty bodies that weren't seen in v1.0; GitHub Actions job duration creeping up.
 
 **Phase to address:**
-Phase 1 (core polling engine) — isolate the availability-fetch behind an adapter from day one.
+Area-search implementation phase (the phase that adds RIDB region resolution + expands watches into campground lists) — request budget must be designed in from the start, not bolted on after the feature works "in the demo."
 
 ---
 
-### Pitfall 2: Treating API/network errors as "no availability" and going silently dark, or alerting on every poll failure
+### Pitfall 2: Area search repeats the v1.0 name-resolution bug, but multiplied across every campground in the region
 
 **What goes wrong:**
-Two opposite failure modes are both common: (a) a fetch error (timeout, 5xx, malformed JSON) is caught and swallowed, the watch loop just moves on, and the user never finds out the tool has effectively stopped working for days; (b) every transient error (a single 502, a DNS blip) immediately fires a "something's wrong" email, training the user to ignore alerts (alert fatigue) — which is exactly as bad as going dark when a real match happens.
+v1.0 already hit this at 1x scale: an RIDB facility-name search resolved to "BANDIDO GROUP CAMPGROUND" instead of the intended "Upper Pines," requiring a manual `facilityId` pin. Area search removes the single override point entirely — instead of one name match to verify, it's an entire list of facilities RIDB returns for a geographic query, and RIDB facility data includes non-campground entries (visitor centers, group sites, day-use areas, boat ramps, ranger stations) mixed in with actual campgrounds. If the area resolver doesn't filter by facility type/reservable status, users get watches silently matching "sites" that were never bookable campsites, and never notice until a false-positive (or total silence) surfaces the bug — same failure class as v1.0, now undetectable-by-inspection because there's no single facility name to eyeball.
 
 **Why it happens:**
-Polling error handling is usually an afterthought bolted on late. Developers focus on the happy path (found availability → email) and treat errors as edge cases rather than a first-class outcome that needs its own alerting policy.
+RIDB's `/facilities` endpoint mixes facility types under one schema; a geo/region query returns everything in the bounding radius, not just "front-country individual campsites," and there's no obvious flag developers reliably filter on without reading FacilityTypeDescription/reservable fields carefully.
 
 **How to avoid:**
-Distinguish "no availability found" (successful check, real answer) from "check failed" (couldn't get an answer) at the type level — never conflate them. For check failures: retry with backoff within the same run; only escalate to the user after N consecutive failed poll *cycles* (e.g., 3 cycles in a row, not 3 single requests), and send at most one "polling has been failing" digest email per incident (not one per cycle) with a cooldown before re-alerting for the same ongoing incident. Log every poll outcome (success/fail/match) somewhere durable so failures are diagnosable after the fact even without an email.
+- Explicitly filter RIDB area-search results by facility type (campground-only, not general "recreation area") and by reservable status before ever expanding into availability polling.
+- Surface the resolved campground list to the user in the watch-creation UI *before* saving the watch ("This area watch will check: X, Y, Z") — the same visibility gap that let BANDIDO ship undetected in v1.0 must be closed for area watches, where the blast radius of a bad match is larger.
+- Persist the resolved facility ID list alongside the area watch definition (not just the area query itself) so a specific bad match can be excluded without re-running the whole region resolution, mirroring the manual-pin fix pattern already used in v1.0.
+- Add a lightweight allowlist/denylist per watch so a user can exclude a specific facility ID that turns out to be wrong, without abandoning the area watch entirely.
 
 **Warning signs:**
-No alert in weeks despite a park you know has churn; alert emails about errors arriving every 5 minutes; inability to answer "when did this last successfully run?" without checking logs manually.
+Area watch's resolved-campground list includes names containing "Group," "Day Use," "Visitor Center," "Boat," "Ranger Station," or facility types outside "Campground" when reviewed manually; watch notification volume dramatically higher or lower than expected for the region.
 
 **Phase to address:**
-Phase 1–2 (polling engine + notification logic) — build the success/failure/match state machine before adding more watches or polish.
+Area-search implementation phase — the resolution-to-facility-list step needs a review/confirmation UX and type filtering built in, not added after a bad match ships (as happened in v1.0).
 
 ---
 
-### Pitfall 3: Duplicate/spam emails because "match" state isn't persisted between runs
+### Pitfall 3: UI write path races the poller's own 5-minute commit-back cycle
 
 **What goes wrong:**
-Each poll run is a fresh serverless invocation with no memory of prior runs. Without persisted state, the naive approach ("email whenever a watch finds an available site") re-sends an email every single poll cycle for as long as the site stays available — which, for a popular last-minute cancellation, could be a several-hour window and 40+ duplicate emails at a 5-10 minute cadence.
+The poller already commits `state.json`/`runs.json` to `main` every ~5 minutes via GitHub Actions. If the new watch-management UI also writes to `main` (to update `watches.json`) via the GitHub Contents API, the two writers are uncoordinated. GitHub's Contents API requires the current file `sha` for updates and returns 409 on mismatch (verified — this is a real, well-documented GitHub API behavior). A user edit landing between the poller's read-state and its own commit-back can either (a) fail with a 409 if the UI's write happens to touch a file the poller is also mid-commit on, silently swallowed if not handled, or (b) succeed but get **overwritten**: if the poller's next cycle reads `watches.json` at the start of a run that started before the UI's edit landed, and later commits `state.json`/`runs.json` based on that stale watch list, the *watches* themselves aren't clobbered (poller doesn't write `watches.json`) — but the poller could act on a stale watch list for one cycle, or worse, if any future change makes the poller also rewrite `watches.json` (e.g., normalizing/annotating it), that's a direct collision with the UI writer.
 
 **Why it happens:**
-Serverless/cron functions are stateless by default; it's easy to prototype against "does this watch currently have availability" and forget that "currently" needs to be diffed against "last known state," which requires external persistence (DB, KV store, or even a flat file/blob) that survives between invocations.
+v1.0's git-write path was designed for exactly one writer (the poller, guarded by the workflow's `concurrency` setting per PROJECT.md). Adding a second writer (the dashboard UI, from a completely different runtime — Vercel serverless/edge, not GitHub Actions) breaks the single-writer assumption the `concurrency` guard was built around; that guard only prevents overlapping *poller* runs, it does nothing for a Vercel function writing at the same time.
 
 **How to avoid:**
-Persist last-known-match state per watch (e.g., a hash of matched site IDs + dates, or a "last notified at" timestamp) in a durable store (SQLite file on a persistent volume, or a hosted KV/Postgres if going serverless). On each poll, diff current matches against persisted state: only email for *newly* appearing matches, and support an explicit re-notify cadence (e.g., "if still available after 6 hours, remind me once") rather than every cycle. Design this from the start — retrofitting dedup logic after users are already receiving spam is a trust-destroying bug to ship.
+- Keep `watches.json` writes exclusively owned by the UI/API route; never have the poller write to it (read-only from the poller's side) — this avoids the two-writer-same-file problem for the file that matters most.
+- On write, always re-fetch the current `sha` immediately before commit and handle 409 with a bounded retry (re-fetch sha, re-apply the diff, retry once or twice) rather than failing silently or blindly overwriting.
+- Treat the UI's write and the poller's read as eventually consistent — the poller already fetches `watches.json` fresh each cycle (per the deployment-agnostic pipeline shape), so a watch edited mid-cycle is simply picked up next cycle; document this latency (~≤5 min) in the UI so users aren't surprised a saved watch doesn't poll instantly.
+- Do not have the UI write to `state.json` or `runs.json` under any circumstances — those remain poller-owned; keep a hard file-ownership boundary (UI owns `watches.json`, poller owns `state.json`/`runs.json`) to eliminate an entire class of races by construction rather than by locking.
 
 **Warning signs:**
-Inbox getting 5+ near-identical emails for the same watch in an hour; no persisted state file/table exists in the architecture; state only lives in serverless function memory (resets every cold start).
+Watch edits that appear to "revert" or disappear after a poll cycle; 409s in Vercel function logs; a watch add/delete not reflected in the next dashboard poll-result view within one cron interval.
 
 **Phase to address:**
-Phase 1 (core polling engine) — this is core to the "avoids duplicate/spammy alerts" requirement already in PROJECT.md; needs a persistence layer chosen before the polling loop is built, not bolted on later.
+Watch-management UI phase (the write-path implementation) — file ownership boundaries and 409-retry handling must be designed before the write endpoint ships, since this is the phase that introduces the second writer.
 
 ---
 
-### Pitfall 4: Serverless function timeout when polling many watches sequentially
+### Pitfall 4: Unauthenticated write endpoint on a public URL — assuming "single-user" means "no one else can find it"
 
 **What goes wrong:**
-A single scheduled function that loops over N watches, each requiring 1+ HTTP calls to recreation.gov (potentially multiple months per watch if the date range spans month boundaries), can exceed the platform's execution timeout as watch count grows. Vercel Hobby caps functions at 10s (up to ~60s serverless / 300s Pro depending on plan); if the loop is sequential and each fetch takes 1-3s plus retries, a handful of watches with wide date ranges can blow the budget, causing silent partial failures (some watches never get checked that cycle) with no alert (cron invocations are fire-and-forget — a timeout or non-2xx doesn't page anyone by default).
+The dashboard is public, no-auth, at a guessable/indexed Vercel URL (per PROJECT.md, already live at a public `.vercel.app` address). Adding a write path (create/edit/delete watch) to that same public, unauthenticated surface means *any internet user* who discovers the URL — via search engine crawl, Vercel's public deployment listing, a shared link, or simple guessing — can create, modify, or delete the owner's watches. Because `watches.json` lives in a public GitHub repo and controls what the poller does, this is a real (if low-probability) vector for someone to grief the tool: silently deleting all watches (denial of the tool's entire purpose), or spamming it with junk watches that burn the RIDB/availability rate budget from Pitfall 1, or — most concerning — pointing a watch's email-notification target if that ever becomes user-configurable (currently it isn't, per constraints, but this is exactly the kind of unauthenticated write endpoint that gets extended carelessly later).
 
 **Why it happens:**
-Works fine in dev/testing with 1-2 watches; nobody load-tests the scheduled function against a realistic watch count and date-range span before shipping.
+"Single-user tool" gets conflated with "not attacked" — but public URL + public repo + write endpoint = attackable by anyone, regardless of how many people are the *intended* user. v1.0's read-only dashboard was safe to leave unauthenticated because reads have no blast radius; adding *any* write endpoint changes that calculus even for a single-user tool, since the write endpoint doesn't know who "the" user is.
 
 **How to avoid:**
-Fetch watches concurrently (with a bounded concurrency limit to stay under Recreation.gov's rate limit — see Pitfall 5) rather than sequentially. Cache/reuse a single month-fetch across watches that target the same campground+month instead of re-fetching per watch. Keep per-invocation work bounded and set an explicit internal deadline (e.g., abort remaining work at 80% of the platform timeout) so a slow watch doesn't starve the rest. If using Vercel Hobby, be aware cron can only fire once per day on Hobby — a "few minutes" cadence requires Pro or a non-Vercel scheduler (GitHub Actions cron, a VPS with cron, Railway/Fly.io scheduled jobs, etc.); factor this into the deployment-target decision explicitly.
-Note also that Vercel cron invocations are "fire-and-forget" with no built-in failure alerting on lower tiers — pair the scheduled job with its own external heartbeat/dead-man's-switch (e.g., a healthcheck ping service) so a systemic failure to run doesn't go unnoticed indefinitely.
+- Do not ship an unauthenticated write endpoint. At minimum, gate writes behind a shared secret (e.g., a password/token stored as a Vercel env var, checked server-side, not exposed to the client) even for a "just me" tool — this is the minimum viable control, not full auth/accounts (which PROJECT.md explicitly keeps out of scope).
+- Never let a client-side-only check (e.g., a password field with client-side comparison) gate the actual GitHub write — the write must happen server-side (Vercel API route/server action) with the secret validated server-side, since GitHub Contents API credentials (a PAT with `contents: write` on the repo) must never be shipped to the browser.
+- Rate-limit or otherwise bound the write endpoint itself (e.g., max N watch-writes per hour) as defense in depth against a compromised/leaked secret or a scripted abuse attempt, independent of the RIDB-facing rate limiting in Pitfall 1.
+- Scope the GitHub token used by the write endpoint as narrowly as possible (fine-grained PAT limited to this one repo, contents-only permission) so a leaked token's blast radius is capped to this repo, not the user's whole GitHub account.
 
 **Warning signs:**
-Function logs show timeouts or truncated execution; some watches consistently never get an alert even for parks known to have openings; adding a new watch measurably increases run time; Hobby-plan cron silently only running once daily instead of every few minutes.
+Any watch appearing in `watches.json` history (git log) that the user doesn't recognize creating; a spike in poll cycle duration or RIDB call volume uncorrelated with the user's own activity; the write endpoint accessible via a GET-turned-POST from browser devtools without any credential prompt.
 
 **Phase to address:**
-Phase 1 (core polling engine, deployment choice) — the deployment-target decision (Vercel cron vs. self-hosted script) explicitly called out in PROJECT.md should be resolved with this timeout/cadence math in hand, not after the fact.
-
----
-
-### Pitfall 5: Getting rate-limited or IP-blocked by Recreation.gov from over-aggressive or poorly-distributed polling
-
-**What goes wrong:**
-The RIDB metadata API enforces ~50 requests/minute (documented; raised with a free API key). The undocumented month-availability endpoint has no published limit, but community reports and forum discussion confirm recreation.gov actively pushes back on bot-like traffic (rate limiting, temporary blocks, occasional CAPTCHAs) especially around high-demand release windows. A tool that fans out many concurrent requests per poll cycle (one per watch, one per month in range) without any throttling can trip this, causing 429/403 responses that — per Pitfall 2 — must not be misread as "no availability."
-
-**Why it happens:**
-It's tempting to just fire all watch checks in parallel for speed, especially once Pitfall 4 pushes toward concurrency. Nobody budgets for backoff/jitter until they get blocked in production.
-
-**How to avoid:**
-Add a global rate limiter/queue in front of all outbound recreation.gov requests (bounded concurrency, e.g., 2-5 in flight, with small random jitter between requests) shared across all watches in a run, not per-watch. Send a legitimate `User-Agent` identifying the tool (not impersonating a browser) and, where available, use the free RIDB API key even though it's not strictly required for the availability endpoint — it signals good-faith registered usage. Implement exponential backoff on 429/5xx with a cap, and treat sustained rate-limiting as a "check failed" outcome (Pitfall 2), not a false "no availability."
-
-**Warning signs:**
-429/403 responses appearing in logs; availability checks that used to take 1-2s starting to hang or fail during known high-traffic windows (e.g., midnight when 6-month release windows open); IP-based temporary blocks correlating with poll cycles.
-
-**Phase to address:**
-Phase 1-2 (polling engine hardening) — build the rate limiter alongside the initial fetch adapter; don't wait until watch count grows.
-
----
-
-### Pitfall 6: Transactional alert emails landing in spam, so the "fast enough to book it" promise silently fails
-
-**What goes wrong:**
-The entire value proposition of this project is "email fast enough to act." If the alert lands in spam/promotions or is delayed by greylisting, the user finds out too late — the core value silently fails without the system ever knowing (email services report "delivered" even when the destination places it in spam). Sending from an unauthenticated/unverified domain, using a shared low-reputation "from" address, or triggering spam heuristics (urgent subject lines like "AVAILABLE NOW!!", link-heavy body) compounds the risk. About 17% of a major provider's transactional email volume has been reported landing in spam even post-"delivery."
-
-**Why it happens:**
-For a single-user personal tool, it's tempting to skip domain verification/DKIM/SPF setup and just use the email provider's default sending domain or a quick "send from noreply@provider-shared-domain.com" — it works in testing (test inbox has no spam history) but degrades once the sending pattern looks automated over time.
-
-**How to avoid:**
-Verify a custom sending domain with the transactional provider (Resend/SendGrid) and set up SPF, DKIM, and ideally DMARC records before relying on it. Keep the email content simple, personal, and low-urgency-language (plain text or minimal HTML, clear subject like "Campsite open: {park} {dates}" rather than clickbait). Since it's single-recipient, explicitly whitelist the sending address in the destination inbox (Gmail filter: "never send to spam") as a belt-and-suspenders step — cheap insurance for a single-user tool. Consider a secondary/redundant delivery signal (e.g., also log matches somewhere checkable) so a missed email isn't a total loss.
-
-**Warning signs:**
-Test emails landing in spam/promotions during development; no SPF/DKIM configured on the sending domain; using the provider's shared/default domain instead of a verified custom one.
-
-**Phase to address:**
-Phase 2 (notification delivery) — set up domain auth and inbox whitelisting as part of "email sending" work, not as a later polish item.
-
----
-
-### Pitfall 7: Hardcoding or loosely handling secrets (API keys, email service keys) in a scheduled/serverless context
-
-**What goes wrong:**
-Single-user tools often skip proper secrets hygiene because "it's just me" — committing a `.env` with real keys to a public GitHub repo (common for personal project portfolios), logging full request/response payloads that include the email API key in headers, or using the same email-provider API key with full account permissions instead of a scoped/sending-only key. On serverless platforms, secrets set as plain environment variables are visible to anyone with dashboard/CI access and can leak into build logs if not marked "sensitive."
-
-**Why it happens:**
-Fast personal-project iteration deprioritizes secret scoping; committing example `.env.example` files sometimes accidentally becomes committing real `.env`.
-
-**How to avoid:**
-Never commit `.env` (verify `.gitignore` from the first commit); use the deployment platform's encrypted/sensitive env var storage (Vercel "Sensitive" env vars, GitHub Actions Secrets); scope the email provider API key to "send only" permissions if the provider supports scoped keys; avoid logging full HTTP headers/bodies in error logs (redact Authorization headers); rotate keys if a repo was ever public with a real key committed, even briefly.
-
-**Warning signs:**
-`git log` shows a `.env` file was ever tracked; logs contain `Authorization:` header values; the email API key used has full account access (contacts, domains, billing) rather than send-only scope.
-
-**Phase to address:**
-Phase 0/1 (project setup) — establish `.gitignore`, secret scoping, and env var conventions before the first real API key is generated.
+Watch-management UI phase, specifically the write-endpoint design step — auth-gating must be a first-class requirement of that phase's plan, not an afterthought discovered during review. This is a MUST-fix before merge, not a "nice to have" deferred item, given the write endpoint directly controls a script that commits to a public repo on a schedule.
 
 ---
 
 ## Technical Debt Patterns
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|-----------------|-----------------|
-| Storing watch/match state in an in-memory object or plain file on ephemeral serverless storage | Ships faster, no DB setup | State lost on cold start/redeploy → duplicate emails resurface (Pitfall 3) | Never for the match-dedup state; acceptable only for truly disposable caches |
-| Polling every watch sequentially instead of building a rate-limited queue | Simpler code, one loop | Timeout risk grows linearly with watch count (Pitfall 4); no backpressure against Recreation.gov (Pitfall 5) | OK for v1 with 1-3 watches and a wide time budget; must be revisited before adding many watches |
-| Sending from provider's default/shared domain instead of verifying a custom domain | Zero DNS setup, works immediately | Higher spam-folder risk over time as sending patterns look automated (Pitfall 6) | Acceptable only during initial dev/testing, not for the live alerting path |
-| Catching all fetch errors and just `console.log`-ing them | Fast to write, doesn't crash the function | Silent dark periods with no user awareness (Pitfall 2) | Never beyond a throwaway prototype |
+|----------|-------------------|-----------------|------------------|
+| Re-resolve area → facility list on every poll cycle instead of caching | Simpler code, always "fresh" | Multiplies RIDB calls 288x/day per area watch for data that rarely changes | Never at 5-min cadence; acceptable only if area resolution is moved to a much slower cadence (e.g., daily) |
+| Let poller silently continue polling a resolved-but-now-deleted campground in a region until next re-resolution | Avoids extra RIDB calls | Wastes availability-endpoint budget on stale facilities; user may get notified about a campground that's actually closed/decommissioned | Acceptable short-term if re-resolution runs at least weekly and stale entries expire automatically |
+| Skip 409-retry logic on the UI write path ("it'll rarely collide") | Faster to ship | Silent data loss on the (rare but real) cycle where a write lands mid-poller-commit; hard to debug after the fact since git history won't show a clean story | Never — retry-on-409 is cheap to add and the failure mode is a lost user edit |
+| Password-gate the write endpoint instead of building real auth | Fast, matches "single user, no accounts" constraint | Shared secret can leak (browser history, screen share, committed by accident); no per-action audit trail | Acceptable for v1.1 given explicit no-multi-user-accounts constraint in PROJECT.md, provided secret is server-side only and rotatable |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
-|-------------|-----------------|-------------------|
-| Recreation.gov RIDB API | Assuming RIDB exposes live per-site availability | Use RIDB only for facility/campsite metadata; use the separate undocumented `/api/camps/availability/campground/{id}/month` endpoint for live availability |
-| Recreation.gov availability endpoint | Treating an empty/error response as "no availability" | Explicitly distinguish HTTP/parse errors from a valid "0 sites available" response |
-| Vercel Cron | Assuming cron fires exactly on schedule and alerts on failure | Cron timing can drift up to the next hour boundary; invocations are fire-and-forget with no default failure alert — add an external heartbeat check |
-| Resend/SendGrid | Using default sending domain, no SPF/DKIM | Verify custom domain, configure SPF/DKIM/DMARC before relying on delivery |
-| Serverless env vars | Storing API keys as plain (non-sensitive) env vars visible in dashboard/logs | Use platform's encrypted/sensitive secret storage; scope keys to minimum required permission |
+|-------------|----------------|-------------------|
+| RIDB `/facilities` geo search | Treating all returned facilities as "campgrounds" without filtering FacilityTypeDescription/reservable flags — repeats the v1.0 BANDIDO mismatch at region scale | Filter to campground-type, reservable facilities only; surface resolved list to user before saving watch |
+| RIDB `/facilities` geo search | Re-querying RIDB on every poll cycle to re-resolve an area, burning into the 50 req/min RIDB limit alongside any concurrent poll activity | Cache the area → facility-ID resolution (daily or on-demand "refresh area" action), not every cron cycle |
+| Recreation.gov undocumented availability endpoint | Assuming the "~1 req/sec" v1.0 convention scales linearly just by adding more calls per cycle without re-budgeting for area watches | Explicitly cap max campgrounds polled per cycle and stagger calls with real delays; treat this endpoint as *more* fragile under higher volume, not less, since it's undocumented and unrateilimited by contract |
+| GitHub Contents API (new write path) | Writing without re-fetching `sha` immediately before the PUT, causing spurious 409s under any concurrent activity (including the poller's own unrelated commits to other files, which still advance the repo's HEAD) | Always fetch current file sha right before write; handle 409 with fetch-and-retry, not a hard failure surfaced to the user as "watch save failed" with no recovery |
+| GitHub Contents API (new write path) | Shipping the GitHub PAT to the client/browser bundle (e.g., using it in a client component instead of a server action/API route) | All GitHub writes happen server-side only (Vercel API route/server action); token lives in Vercel env vars, never in client bundle |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|-----------------|
-| Sequential per-watch fetching | Run time grows linearly with watch count; timeouts start appearing | Bounded-concurrency fetch queue, dedupe fetches by campground+month across watches | Around 5-10 watches with multi-month date ranges on a 10-60s serverless timeout |
-| Re-fetching the whole month's data every poll cycle even when nothing changed | Wasted requests, higher rate-limit exposure | Cache last-fetched month payload with a short TTL if polling faster than data actually changes upstream | High-frequency polling (sub-5-min) against a source that doesn't update that fast |
-| One email send per poll cycle per matched watch | Provider send-rate limits/costs climb, inbox spam risk climbs | Dedup via persisted match state (Pitfall 3), batch multiple new matches across watches into one digest email per cycle | Multiple simultaneous watches all matching around the same time |
+| One availability call per campground per area watch per cycle, no cap | Cycle duration creeping toward/past 5 min; runs.json showing longer durations over time | Hard cap on facilities-per-area-watch + de-dup across watches + explicit inter-request delay | Breaks almost immediately with 2-3 area watches covering typical multi-campground regions (20-50 facilities each) |
+| Re-resolving RIDB area search every poll cycle | RIDB call volume scales with poll frequency (288/day per area watch) instead of with region-data staleness | Cache resolution with a TTL (e.g., 24h), independent of the 5-min availability poll cadence | Breaks once more than a couple of area watches exist alongside pinned watches, competing for the same 50 req/min RIDB budget |
+| Unbounded watch count from an open write endpoint (Pitfall 4) compounding with Pitfall 1's per-watch cost | Cycle duration and RIDB/availability call volume grow with any additions to `watches.json`, authorized or not | Cap total watches (and total resolved facilities across all watches) enforced server-side in the write endpoint, not just client-side UI validation | Breaks once total resolved-facility count across all watches exceeds what fits in the 5-min budget at the ~1 req/sec convention (roughly 300 calls/cycle ceiling, likely much lower in practice given RIDB's 50/min cap for resolution calls too) |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Committing `.env` with real API keys to a (possibly public) repo | Key theft, abuse of email-sending quota, exposure of personal watch config | `.gitignore` from first commit; verify with `git status`/`git log` before pushing; rotate immediately if ever exposed |
-| Using a full-access email API key instead of a scoped "send-only" key | Compromise of the key exposes contacts/domains/billing, not just sending | Create a scoped key limited to transactional sending if the provider supports it |
-| Logging full HTTP request/response including Authorization headers on error | Secrets end up in log storage/observability tooling with looser access control | Redact sensitive headers before logging; log status/body only |
+| Shipping the watch write endpoint with no auth gate at all, reasoning "it's a single-user tool" | Anyone with the public dashboard URL can delete/modify all watches, or spam junk watches that burn the RIDB rate budget and drown real notifications | Server-side shared-secret gate at minimum, validated in the API route, never in client-side JS |
+| Embedding the GitHub PAT (contents:write) in client-visible code or a public env var (Vercel `NEXT_PUBLIC_*`) | Full repo write access leaks to anyone who opens devtools/view-source | Keep the token in a server-only Vercel env var, used only inside API routes/server actions, never `NEXT_PUBLIC_` |
+| Using a broadly-scoped PAT (full account access) for the write endpoint out of convenience | A leaked token compromises far more than `watches.json` | Use a fine-grained PAT scoped to this one repo, contents permission only |
+| No upper bound on watch count / resolved facilities accepted by the write endpoint | An abusive or accidental bulk-write (scripted, or even a UI bug) inflates poll cost past the RIDB/availability budget, degrading or breaking the tool for the real user | Server-side validation caps (max watches, max facilities per area watch) enforced in the write endpoint, independent of any client-side UI limits |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-------------------|
-| Alert email doesn't include a direct booking link or is missing key details (site number, dates) | User has to manually search recreation.gov again, losing the speed advantage the whole tool exists for | Include a direct deep link to the specific campground/date on recreation.gov, plus site ID/number and dates in the email body and subject |
-| Silent failure mode with no way to check "is this even running" | User loses trust, assumes tool is broken or stops checking email | Provide a lightweight heartbeat/status signal (e.g., a periodic "still watching, no changes" digest at a much lower frequency, or a status endpoint/log the user can check) |
-| Generic subject line for all alerts | Easy to miss in a busy inbox, gets buried, or gets auto-filtered | Distinct, specific subject per match: park + dates, so it's scannable and less likely to look automated/spammy |
+| Saving an area watch without showing which campgrounds it resolved to | User can't tell if RIDB matched the wrong facility type (v1.0's BANDIDO bug repeats, invisibly) until a wrong/missing notification surfaces it | Show the resolved campground list (names + facility type) in the UI before/after save, with an option to exclude specific ones |
+| UI implies watch edits take effect "instantly" | User assumes an edit is live, but poller only re-reads `watches.json` on its next 5-min cycle | Show "last polled" / "next poll in ~X min" status so the ≤5-min propagation delay is visible, not surprising |
+| Write endpoint fails silently on a 409 (poller/UI race) | User's edit appears to save (200 in the browser) but is actually lost, with no indication | Surface write failures/retries clearly in the UI; only show "Saved" after a confirmed successful commit, not optimistically |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Duplicate suppression:** Often missing persisted state between invocations — verify by running two consecutive poll cycles against a known-available site and confirming only one email is sent
-- [ ] **Error vs. no-match distinction:** Often conflated — verify by simulating a network failure (e.g., point at an invalid host temporarily) and confirming it does NOT produce a "no availability" false negative silently, and does NOT spam an error email per cycle
-- [ ] **Deployment cadence match:** Often overlooked — verify the chosen scheduler actually supports the "every few minutes" cadence in PROJECT.md (Vercel Hobby cron does not; Pro or an alternative scheduler does)
-- [ ] **Email deliverability:** Often skipped for personal tools — verify SPF/DKIM pass and the test alert lands in Primary/Inbox, not Spam, on the actual destination account
-- [ ] **Rate-limit resilience:** Often untested until it breaks in production — verify behavior under a simulated 429 (backoff, escalation only after sustained failure, no false "no availability")
-- [ ] **Secrets hygiene:** Often assumed fine for "just me" projects — verify `.env` was never committed and API keys are stored as sensitive/encrypted platform secrets
+- [ ] **Area search:** Often missing facility-type/reservable filtering — verify the resolved list contains only actual reservable campgrounds, not visitor centers/day-use/group sites
+- [ ] **Area search:** Often missing a request budget check — verify total resolved facilities across all active watches stays within a documented per-cycle cap before shipping
+- [ ] **Watch write endpoint:** Often missing server-side auth — verify the write route rejects requests without the shared secret even if called directly (curl/devtools), not just hidden from the UI
+- [ ] **Watch write endpoint:** Often missing 409/sha-conflict handling — verify a forced concurrent write (simulate poller commit + UI save at the same moment) doesn't silently lose the user's edit
+- [ ] **Watch write endpoint:** Often missing server-side validation caps — verify the endpoint itself (not just the UI form) rejects an unreasonable watch count/facility count, since the UI's client-side limits are trivially bypassable
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
-|---------|----------------|-----------------|
-| Duplicate email spam already shipped to users | LOW | Add persisted match-state store, backfill a migration to seed initial "already notified" state so existing matches don't re-fire on deploy |
-| API key committed to a public repo | MEDIUM | Rotate the key immediately at the provider, scrub git history (`git filter-repo` or BFG) if repo must stay public, treat any usage in the interim as compromised |
-| Emails landing in spam after launch | MEDIUM | Verify custom domain + SPF/DKIM/DMARC retroactively, ask user to whitelist sender, consider domain warm-up period with low volume before relying on it fully |
-| Function silently failing/timing out for weeks unnoticed | LOW-MEDIUM | Add an external heartbeat/dead-man's-switch monitor immediately; backfill logging so future silent failures are diagnosable |
+|---------|-----------------|------------------|
+| Area watch resolved to wrong/irrelevant facilities (Pitfall 2) | LOW | Exclude the bad facility ID via the per-watch allowlist/denylist; no code change needed if that mechanism exists |
+| RIDB/availability rate budget exceeded, requests start failing (Pitfall 1) | MEDIUM | Reduce area-watch facility cap, increase poll interval for area watches, or temporarily disable area watches via `watches.json` while re-tuning the cap |
+| Lost watch edit due to git write race (Pitfall 3) | LOW-MEDIUM | Git history on `watches.json` preserves prior commits — the pre-loss state is recoverable from git log even if the write endpoint didn't retry; re-apply the edit manually if needed |
+| Unauthorized write occurred (Pitfall 4) | MEDIUM | Git history shows exactly what changed and when; revert the offending commit on `watches.json`, rotate the shared secret and the GitHub PAT immediately |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
-|---------|-------------------|----------------|
-| Wrong/undocumented endpoint reliance | Phase 1 (core polling engine) | Adapter module isolates availability-fetch logic; RIDB used only for metadata |
-| Errors mistaken for "no availability" / silent dark periods / error-spam | Phase 1-2 (polling engine + notifications) | Simulated failure test shows correct 3-state handling (match/no-match/check-failed) and single incident email, not per-cycle |
-| Duplicate/spam emails on repeat matches | Phase 1 (core polling engine — persistence layer) | Two consecutive poll cycles against a known match produce exactly one email |
-| Serverless timeout with many watches | Phase 1 (polling engine + deployment choice) | Load test with realistic watch count stays well under platform timeout; deployment platform's cadence limits confirmed to meet "every few minutes" requirement |
-| Rate-limited/blocked by Recreation.gov | Phase 1-2 (polling engine hardening) | Concurrency-limited queue with backoff exists; 429 handling verified not to cause false negatives |
-| Alert emails in spam | Phase 2 (notification delivery) | Domain verified, SPF/DKIM pass, test alert confirmed in destination Inbox |
-| Secrets mishandling | Phase 0/1 (project setup) | `.gitignore` covers `.env`; secrets stored as platform-encrypted vars; email key scoped to send-only if supported |
+|---------|--------------------|----------------|
+| Area search request-budget blowout | Area-search implementation phase | Load-test with a realistic multi-campground region watch; confirm cycle duration stays well under 5 min and RIDB/availability call counts are logged and capped |
+| Area search name/type-resolution ambiguity | Area-search implementation phase | Manually review resolved facility list for at least one real region watch before merge; confirm facility-type filter excludes non-campground entries |
+| Poller/UI git-write race on `watches.json` | Watch-management UI phase | Simulate a write during an in-flight poller commit (or review the 409-retry code path directly); confirm no silent data loss |
+| Unauthenticated write endpoint | Watch-management UI phase | Attempt to call the write endpoint directly (no browser, no secret) and confirm it's rejected; confirm PAT is not present in any client-shipped bundle |
 
 ## Sources
 
-- [Recreation Information Database API — PublicAPI](https://publicapi.dev/recreation-information-database-api) (RIDB rate limits, ~50 req/min, optional API key) — MEDIUM confidence
-- [GitHub - banool/recreation-gov-campsite-checker](https://github.com/banool/recreation-gov-campsite-checker) — community reference implementation showing use of the undocumented availability endpoint — MEDIUM confidence
-- [camply on PyPI](https://pypi.org/project/camply/) — established open-source campsite availability monitor, confirms notify-only (no auto-book) pattern — MEDIUM confidence
-- [No, "bots" didn't steal your campsite - Here & There](https://www.hereandthere.club/p/no-bots-probably-didnt-take-your) — community/press discussion of campsite notifier bots and Recreation.gov's stance — LOW-MEDIUM confidence
-- [Troubleshooting Vercel Cron Jobs | Vercel Knowledge Base](https://vercel.com/kb/guide/troubleshooting-vercel-cron-jobs) — official, fire-and-forget behavior, timing imprecision — HIGH confidence
-- [Vercel cron jobs limit: Hobby plan caps and how to beat them](https://crontap.com/blog/vercel-cron-hourly-limit-and-how-to-beat-it) — Hobby plan once-daily cron limitation — MEDIUM confidence
-- [Best Practices Learned from Production Use of Vercel Cron](https://zenn.dev/asoventure/articles/2026-06-28-vercel-cron-best-practices?locale=en) — timeout/queue pattern recommendations — MEDIUM confidence
-- [SendGrid Email Deliverability: The Real Truth for B2B Cold Senders (2026)](https://www.mailreach.co/blog/sendgrid-email-deliverability) — ~17% spam-folder rate stat, shared-stream reputation issue — MEDIUM confidence
-- [Transactional Email for Bootstrapped SaaS: Resend vs SendGrid vs Postmark vs Mailgun in 2026](https://f3fundit.com/transactional-email-bootstrapped-saas-resend-sendgrid-postmark-mailgun-2026/) — provider comparison, domain auth guidance — MEDIUM confidence
+- [RIDB API 1.0.0 OAS 3.0 (official docs)](https://ridb.recreation.gov/docs) — rate limit (50 req/min), facilities geo-search parameters
+- [RIDB API documentation (usda.github.io/RIDB)](https://usda.github.io/RIDB/) — facility schema/type fields
+- [GitHub Contents API 409 Conflict discussion](https://github.com/orgs/community/discussions/62198) — sha-mismatch conflict behavior under repeated/concurrent updates
+- [google/go-github issue #2707 — Unable to update existing file, 409](https://github.com/google/go-github/issues/2707) — confirms sha-refetch-and-retry is the standard fix pattern
+- `.planning/PROJECT.md` — v1.0 BANDIDO name-resolution bug, existing `~1 req/sec` convention, public-repo/no-auth constraints, single-writer `concurrency` guard on the poller workflow
+- `.planning/milestones/v1.0-phases/03-status-dashboard/03-REVIEW.md` (referenced in PROJECT.md) — known v1.0 tech debt relevant to dashboard write-path additions (not read directly in this research pass; recommend reviewing before the UI phase starts)
 
 ---
-*Pitfalls research for: Recreation.gov campsite availability watcher (scheduled polling + email alerts)*
-*Researched: 2026-08-16*
+*Pitfalls research for: Area-based campground search + watch-management write UI on an existing git-backed poller/dashboard system*
+*Researched: 2026-08-25*
