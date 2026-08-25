@@ -119,3 +119,16 @@ root `npm ci` suddenly starts installing `next`/`react`, a dashboard dependency 
 root `package.json`.
 
 Vercel deploys `dashboard/` only, via the project's **Root Directory** setting = `dashboard`.
+
+## Status dashboard
+
+Live at: <https://dashboard-drab-seven-94.vercel.app>
+
+Public, no auth (the repo and the data it renders are already public). Server-rendered on
+Vercel; each request re-reads `watches.json`, `state.json` and `runs.json` from
+raw.githubusercontent.com with a 30-second cache window, so the page can lag a committed
+poll cycle by up to a minute or two. The `Data as of` label reflects the newest run in
+`runs.json`, not page-load time.
+
+Deployed from the `dashboard/` directory only (Vercel Root Directory = `dashboard`). No
+environment variables are configured for this project.
