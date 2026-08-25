@@ -11,19 +11,22 @@ Diff reviewed: `f308535...HEAD` (36 files, +4454/-5), covering plans 03-01 throu
 
 ## Findings
 
-### 1. [correctness · CONFIRMED] Commit-skip guard defeated by unconditional runs.json append
-**File:** `.github/workflows/poll.yml:47`
+### 1. [cleanup · FIXED, was miscategorized as a regression] Dead skip-commit guard with stale log message
+**File:** `.github/workflows/poll.yml:47` (original)
 
-The new "Append run to history log" step runs unconditionally every cycle (`if: always()`) and
-always writes a fresh timestamped entry into `runs.json`, so the downstream "commit only if
-state.json/runs.json changed" guard can no longer be satisfied — every 5-minute cron cycle now
-commits and pushes to `main`, even when nothing else changed.
+**Correction:** this was initially reported as a behavior regression ("commit-skip guard
+defeated"). On closer reading of `03-CONTEXT.md` D-01, committing `runs.json` every cycle —
+regardless of whether a match changed — is the *intended* design: it's how the dashboard's Run
+Timeline shows every poll cycle (verified live: the timeline updated the moment a new run
+landed). Suppressing those commits would have broken that must-have.
 
-Because `runs.json`'s `startedAt`/`finishedAt` timestamps differ every run, `git status
---porcelain -- state.json runs.json` is never empty, so the "No state changes — skipping commit"
-branch is now dead code. This produces ~288 commits/day to the default branch indefinitely — a
-real behavior change from the original "commit only when something actually changed" design
-intent.
+The only real defect was that the old "skip commit if nothing changed" guard (checking
+`git status --porcelain -- state.json runs.json`) could never be satisfied any more, since
+`runs.json` always differs after the always-run append step — making the guard and its
+"No state changes — skipping commit" log line permanently dead code. **Fixed**: removed the
+now-unreachable guard; the step now always commits, matching what actually happens and removing
+the misleading log text. No behavior change — commits still land every cycle, exactly as D-01
+specifies.
 
 ### 2. [correctness · CONFIRMED] Watch id with a colon silently vanishes from Active Matches
 **File:** `dashboard/lib/derive-active-matches.ts:22`
@@ -91,9 +94,9 @@ regression rather than a crash.
 
 ## Recommendation
 
-Findings 1, 2, and 4 are real behavior defects worth fixing before or shortly after this phase is
-marked complete — particularly finding 1, which changes the repo's commit cadence from
-event-driven to constant. None are launch-blocking for the dashboard's core value (a hosted
-status page), and the dashboard itself is live and verified end-to-end (see 03-05-SUMMARY.md).
+Finding 1 was fixed (dead code removed, no behavior change). Findings 2 and 4 are real,
+currently-dormant defects worth fixing when convenient (neither is triggered by the current live
+config). None are launch-blocking for the dashboard's core value (a hosted status page), and the
+dashboard itself is live and verified end-to-end (see 03-05-SUMMARY.md).
 
-Run `/gsd-code-review-fix 03` to address these, or triage manually.
+Run `/gsd-code-review-fix 03` to address the remaining findings, or triage manually.
