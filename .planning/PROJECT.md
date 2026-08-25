@@ -8,6 +8,15 @@ A single-user campsite availability watcher for Recreation.gov. It periodically 
 
 When a watched campsite becomes available on Recreation.gov, the user gets an email fast enough to actually book it before someone else does. (Currently delivered via a status dashboard the user checks manually, until email is unblocked — see Active Requirements.)
 
+## Current Milestone: v1.1 Area Search
+
+**Goal:** Let the user search a broad geographic area for available campsites, instead of having to pre-identify one specific campground, and manage watches through the dashboard UI instead of hand-editing `watches.json`.
+
+**Target features:**
+- Area/region-based campground search — query multiple campgrounds within a region via RIDB, not one pinned facility ID
+- Web UI on the dashboard to create/edit/delete watches (area, dates, site type)
+- Existing polling/matching/dedup/email pipeline extended to handle area-based watches (multiple campgrounds per watch)
+
 ## Requirements
 
 ### Validated
@@ -29,11 +38,12 @@ Validated in Phase 3 (Status Dashboard), live-verified on Vercel:
 ### Active
 
 - [ ] User receives an email when a watch finds a newly available matching site (Phase 2 — blocked on Resend domain verification; user declined to buy a domain, dashboard added as a near-term substitute)
+- [ ] User can search a general area/region for available campsites, not just one pre-identified campground (v1.1)
+- [ ] User can create/edit/delete watches through the dashboard UI, including picking an area and dates (v1.1)
 
 ### Out of Scope
 
 - Multi-user support / accounts / login — this is a single-user personal tool for v1
-- Web UI for managing watches — config file/env vars are sufficient for v1
 - Automated booking/reservation of the campsite — out of scope, notification only (booking sites generally prohibit bots completing checkout, and this reduces liability/complexity)
 - SMS/push notifications — email only for v1
 - Support for booking sites other than Recreation.gov — ReserveCalifornia and others deferred
@@ -80,4 +90,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-25 after Phase 3 (Status Dashboard) completion*
+*Last updated: 2026-08-25 — started milestone v1.1 (Area Search)*

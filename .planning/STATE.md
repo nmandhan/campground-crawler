@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: Phase 03 UI-SPEC approved
-last_updated: "2026-08-25T03:56:59.465Z"
+milestone: v1.1
+milestone_name: Area Search
+status: defining_requirements
+stopped_at: Milestone v1.1 started
+last_updated: "2026-08-25T04:00:00.000Z"
 last_activity: 2026-08-25
 progress:
-  total_phases: 3
-  completed_phases: 2
-  total_plans: 13
-  completed_plans: 12
-  percent: 92
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,8 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-16)
 
 ## Current Position
 
-v1.0 MVP shipped 2026-08-25. All phase directories archived to `.planning/milestones/v1.0-phases/`.
-No active phase — awaiting `/gsd-new-milestone`.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-08-25 — Milestone v1.1 (Area Search) started
 
 Carried-forward context (see PROJECT.md Context/Constraints and MILESTONES.md Known Gaps for detail):
 - Poller live in production: GitHub Actions 5-min cron, public repo, secrets provisioned, dedup/match/commit-back
