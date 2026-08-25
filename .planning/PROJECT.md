@@ -18,10 +18,17 @@ Validated in Phase 1 (Core Polling Engine), live-verified against Recreation.gov
 - [x] System checks Recreation.gov availability for all configured watches on a recurring schedule (every few minutes) — `--loop --interval N` (N ≥ 60s)
 - [x] System avoids duplicate/spammy alerts for the same still-open availability — durable dedup state proven end-to-end (new match → persisted → suppressed on next run)
 
+Validated in Phase 2 (Notification Delivery & Deployment), live-verified via GitHub Actions:
+
+- [x] System runs unattended on a schedule without the user manually triggering checks — GitHub Actions `schedule` trigger (5-min cron), dedup-state commit-back confirmed working end to end against a real Kirk Creek opening
+
+Validated in Phase 3 (Status Dashboard), live-verified on Vercel:
+
+- [x] A hosted status page shows recent poll results and per-watch state as a near-term substitute for the (currently blocked) email path — live at https://dashboard-drab-seven-94.vercel.app, confirmed rendering real data end-to-end including a live poll cycle appearing within its cache window
+
 ### Active
 
-- [ ] User receives an email when a watch finds a newly available matching site (Phase 2)
-- [ ] System runs unattended on a schedule without the user manually triggering checks (Phase 2 — deployment)
+- [ ] User receives an email when a watch finds a newly available matching site (Phase 2 — blocked on Resend domain verification; user declined to buy a domain, dashboard added as a near-term substitute)
 
 ### Out of Scope
 
@@ -70,4 +77,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-22 after Phase 1 (Core Polling Engine) completion*
+*Last updated: 2026-08-25 after Phase 3 (Status Dashboard) completion*
