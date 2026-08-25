@@ -22,13 +22,34 @@ export const SiteTypeSchema = z.enum(['any', 'tent', 'rv', 'group']);
 export const ResolvedSiteTypeSchema = z.enum(['tent', 'rv', 'group', 'unknown']);
 const DateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD');
 
-export const WatchSchema = z.object({
+export const FacilityWatchSchema = z.object({
+  type: z.literal('facility'),
   id: z.string().min(1),
   parkName: z.string().min(1),
   facilityId: z.number().int().positive().optional(),
   dateRange: z.object({ start: DateStr, end: DateStr }),
   siteType: SiteTypeSchema,
 });
+
+export const AreaWatchSchema = z.object({
+  type: z.literal('area'),
+  id: z.string().min(1),
+  // No .min(1) here, deliberately: the dashboard is a read-only viewer and must
+  // display whatever is committed, not gate-keep it (same reasoning as WatchesSchema below).
+  areas: z.array(z.object({ name: z.string(), recAreaId: z.number().int().positive().optional() })),
+  dateRange: z.object({ start: DateStr, end: DateStr }),
+  siteType: SiteTypeSchema,
+});
+
+/** Backward-compatible migration: v1.0 watches.json entries have no `type` field.
+ *  Any object without one is treated as the original single-campground shape, mirroring
+ *  the poller's config/schema.ts preprocess guard. */
+export const WatchSchema = z.preprocess((val) => {
+  if (val !== null && typeof val === 'object' && !Array.isArray(val) && !('type' in val)) {
+    return { ...(val as Record<string, unknown>), type: 'facility' };
+  }
+  return val;
+}, z.discriminatedUnion('type', [FacilityWatchSchema, AreaWatchSchema]));
 // No .min(1) and no unique-id refine here, unlike the poller's config schema: the dashboard is
 // a read-only viewer and must display whatever is committed, not gate-keep it.
 export const WatchesSchema = z.array(WatchSchema);
@@ -44,6 +65,7 @@ export const MatchedSlotSchema = z.object({
   siteType: ResolvedSiteTypeSchema,
   facilityId: z.number(),
   facilityName: z.string(),
+  facilityType: z.enum(['standard', 'group']).default('standard'),
   startDate: DateStr,
   endDate: DateStr,
   bookingUrl: z.string(),
@@ -52,15 +74,33 @@ export const MatchedSlotSchema = z.object({
 const _assertMatchedSlot: MatchedSlot = {} as z.infer<typeof MatchedSlotSchema>;
 void _assertMatchedSlot;
 
+const TruncatedSchema = z.object({ requested: z.number(), kept: z.number() }).optional();
+const FacilityFailuresSchema = z
+  .array(z.object({ facilityId: z.number(), facilityName: z.string(), reason: z.string() }))
+  .optional();
+
 export const WatchOutcomeSchema = z.discriminatedUnion('status', [
   z.object({
     watchId: z.string(),
     status: z.literal('MATCH'),
     newMatches: z.array(MatchedSlotSchema),
     suppressed: z.array(MatchedSlotSchema),
+    truncated: z.object({ requested: z.number(), kept: z.number() }).optional(),
+    facilityFailures: FacilityFailuresSchema,
   }),
-  z.object({ watchId: z.string(), status: z.literal('NO_MATCH') }),
-  z.object({ watchId: z.string(), status: z.literal('FAILED'), reason: z.string() }),
+  z.object({
+    watchId: z.string(),
+    status: z.literal('NO_MATCH'),
+    truncated: TruncatedSchema,
+    facilityFailures: FacilityFailuresSchema,
+  }),
+  z.object({
+    watchId: z.string(),
+    status: z.literal('FAILED'),
+    reason: z.string(),
+    truncated: TruncatedSchema,
+    facilityFailures: FacilityFailuresSchema,
+  }),
 ]);
 
 const _assertWatchOutcome: WatchOutcome = {} as z.infer<typeof WatchOutcomeSchema>;

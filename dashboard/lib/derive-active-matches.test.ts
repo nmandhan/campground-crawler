@@ -18,6 +18,7 @@ const realState: StateFile = {
 // Real watches.json payload (2026-08-23).
 const realWatches: Watch[] = [
   {
+    type: 'facility',
     id: 'upper-pines-labor-day',
     parkName: 'Upper Pines Campground',
     facilityId: 232447,
@@ -25,6 +26,7 @@ const realWatches: Watch[] = [
     siteType: 'tent',
   },
   {
+    type: 'facility',
     id: 'kirk-creek-october',
     parkName: 'Kirk Creek Campground',
     dateRange: { start: '2026-10-09', end: '2026-10-11' },
@@ -50,6 +52,7 @@ const matchingRun: RunLogEntry = {
           siteType: 'tent',
           facilityId: 232447,
           facilityName: 'Kirk Creek Campground',
+          facilityType: 'standard',
           startDate: '2026-10-05',
           endDate: '2026-10-08',
           bookingUrl: 'https://www.recreation.gov/camping/campsites/90195',
@@ -195,4 +198,112 @@ test('stillOpenInLatestRun is false when the latest run has no matching outcome'
 
 test('deriveActiveMatches returns [] for empty state, watches, and runs', () => {
   assert.deepEqual(deriveActiveMatches({ version: 1, entries: {} }, [], [], NOW), []);
+});
+
+test('AREA-05: an area watch match row names the specific matched campground, not the area', () => {
+  const areaWatch: Watch = {
+    type: 'area',
+    id: 'sierra',
+    areas: [{ name: 'Sequoia National Forest' }],
+    dateRange: { start: '2026-10-01', end: '2026-10-10' },
+    siteType: 'tent',
+  };
+  const run: RunLogEntry = {
+    startedAt: '2026-08-24T00:00:00Z',
+    finishedAt: '2026-08-24T00:01:00Z',
+    checked: 1,
+    outcomes: [
+      {
+        watchId: 'sierra',
+        status: 'MATCH',
+        newMatches: [
+          {
+            watchId: 'sierra',
+            campsiteId: '111',
+            siteLabel: '001',
+            loop: 'A',
+            siteType: 'tent',
+            facilityId: 5,
+            facilityName: 'Hume Lake',
+            facilityType: 'standard',
+            startDate: '2026-10-05',
+            endDate: '2026-10-08',
+            bookingUrl: 'https://www.recreation.gov/camping/campsites/111',
+          },
+        ],
+        suppressed: [],
+      },
+    ],
+    newMatches: [],
+    failed: [],
+    noMatch: [],
+  };
+  const state: StateFile = {
+    version: 1,
+    entries: { 'sierra:111:2026-10-05:2026-10-08': { lastNotifiedAt: '2026-08-23T00:00:00.000Z' } },
+  };
+  const rows = deriveActiveMatches(state, [areaWatch], [run], NOW);
+  assert.equal(rows[0]!.parkName, 'Hume Lake');
+});
+
+test('AREA-05/D-05: a group-campground match is flagged with [GROUP]', () => {
+  const areaWatch: Watch = {
+    type: 'area',
+    id: 'sierra',
+    areas: [{ name: 'Sequoia National Forest' }],
+    dateRange: { start: '2026-10-01', end: '2026-10-10' },
+    siteType: 'group',
+  };
+  const run: RunLogEntry = {
+    startedAt: '2026-08-24T00:00:00Z',
+    finishedAt: '2026-08-24T00:01:00Z',
+    checked: 1,
+    outcomes: [
+      {
+        watchId: 'sierra',
+        status: 'MATCH',
+        newMatches: [
+          {
+            watchId: 'sierra',
+            campsiteId: '111',
+            siteLabel: '001',
+            loop: 'A',
+            siteType: 'group',
+            facilityId: 5,
+            facilityName: 'Hume Lake',
+            facilityType: 'group',
+            startDate: '2026-10-05',
+            endDate: '2026-10-08',
+            bookingUrl: 'https://www.recreation.gov/camping/campsites/111',
+          },
+        ],
+        suppressed: [],
+      },
+    ],
+    newMatches: [],
+    failed: [],
+    noMatch: [],
+  };
+  const state: StateFile = {
+    version: 1,
+    entries: { 'sierra:111:2026-10-05:2026-10-08': { lastNotifiedAt: '2026-08-23T00:00:00.000Z' } },
+  };
+  const rows = deriveActiveMatches(state, [areaWatch], [run], NOW);
+  assert.equal(rows[0]!.parkName, 'Hume Lake [GROUP]');
+});
+
+test('an area watch with no matching slot in the latest run falls back to watchLabel(watch)', () => {
+  const areaWatch: Watch = {
+    type: 'area',
+    id: 'sierra',
+    areas: [{ name: 'Sequoia National Forest' }],
+    dateRange: { start: '2026-10-01', end: '2026-10-10' },
+    siteType: 'tent',
+  };
+  const state: StateFile = {
+    version: 1,
+    entries: { 'sierra:111:2026-10-05:2026-10-08': { lastNotifiedAt: '2026-08-23T00:00:00.000Z' } },
+  };
+  const rows = deriveActiveMatches(state, [areaWatch], [], NOW);
+  assert.equal(rows[0]!.parkName, 'Sequoia National Forest (area)');
 });

@@ -5,6 +5,8 @@
  *  `Intl.DateTimeFormat` (RESEARCH.md "Don't Hand-Roll") — no extra date-formatting library.
  */
 
+import type { Watch } from './types';
+
 const RTF = new Intl.RelativeTimeFormat('en', { numeric: 'always' });
 
 type Unit = 'year' | 'month' | 'week' | 'day' | 'hour' | 'minute' | 'second';
@@ -81,6 +83,18 @@ export function formatDateRange(start: string, end: string): string {
   const endLabel = monthDayYearFmt.format(endDate);
 
   return `${startLabel} – ${endLabel} (${nightsLabel})`;
+}
+
+/** The single place a Watch becomes display text. A FacilityWatch shows its parkName;
+ *  an AreaWatch shows its area names joined by ' + ' with an '(area)' suffix so the two
+ *  kinds of watch are never confusable in the UI (AREA-01). */
+export function watchLabel(watch: Watch): string {
+  if (watch.type === 'area') {
+    const names = watch.areas.map((a) => a.name).filter((n) => n.length > 0);
+    if (names.length === 0) return '(area, none listed)';
+    return `${names.join(' + ')} (area)`;
+  }
+  return watch.parkName;
 }
 
 function parseDateOnlyUTC(value: string): number | null {

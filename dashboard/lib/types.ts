@@ -15,12 +15,34 @@
 export type SiteType = 'any' | 'tent' | 'rv' | 'group';
 export type ResolvedSiteType = 'tent' | 'rv' | 'group' | 'unknown';
 
-export interface Watch {
+export interface FacilityWatch {
+  type: 'facility';
   id: string;
   parkName: string;
   facilityId?: number;
   dateRange: { start: string; end: string }; // YYYY-MM-DD
   siteType: SiteType;
+}
+
+export interface AreaWatch {
+  type: 'area';
+  id: string;
+  areas: Array<{ name: string; recAreaId?: number }>;
+  dateRange: { start: string; end: string }; // YYYY-MM-DD
+  siteType: SiteType;
+}
+
+export type Watch = FacilityWatch | AreaWatch;
+
+export interface TruncationInfo {
+  requested: number;
+  kept: number;
+}
+
+export interface FacilityFailure {
+  facilityId: number;
+  facilityName: string;
+  reason: string;
 }
 
 export interface MatchedSlot {
@@ -31,15 +53,23 @@ export interface MatchedSlot {
   siteType: ResolvedSiteType;
   facilityId: number;
   facilityName: string;
+  facilityType: 'standard' | 'group';
   startDate: string; // YYYY-MM-DD, first night
   endDate: string; // YYYY-MM-DD, checkout (exclusive)
   bookingUrl: string; // https://www.recreation.gov/camping/campsites/{campsiteId}
 }
 
 export type WatchOutcome =
-  | { watchId: string; status: 'MATCH'; newMatches: MatchedSlot[]; suppressed: MatchedSlot[] }
-  | { watchId: string; status: 'NO_MATCH' }
-  | { watchId: string; status: 'FAILED'; reason: string };
+  | {
+      watchId: string;
+      status: 'MATCH';
+      newMatches: MatchedSlot[];
+      suppressed: MatchedSlot[];
+      truncated?: TruncationInfo;
+      facilityFailures?: FacilityFailure[];
+    }
+  | { watchId: string; status: 'NO_MATCH'; truncated?: TruncationInfo; facilityFailures?: FacilityFailure[] }
+  | { watchId: string; status: 'FAILED'; reason: string; truncated?: TruncationInfo; facilityFailures?: FacilityFailure[] };
 
 export interface RunSummary {
   startedAt: string; // ISO

@@ -140,3 +140,112 @@ test('a MATCH outcome missing newMatches is rejected (skipped from the log)', ()
     assert.equal(result.skipped, 1);
   }
 });
+
+test('parseWatches accepts a legacy watch with no type field, defaulting to facility', () => {
+  const result = parseWatches([
+    {
+      id: 'kirk',
+      parkName: 'Kirk Creek',
+      dateRange: { start: '2026-09-01', end: '2026-09-03' },
+      siteType: 'tent',
+    },
+  ]);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.data[0]!.type, 'facility');
+  }
+});
+
+test('parseWatches accepts an area watch', () => {
+  const result = parseWatches([
+    {
+      type: 'area',
+      id: 'sierra',
+      areas: [{ name: 'Sequoia National Forest' }],
+      dateRange: { start: '2026-09-01', end: '2026-09-03' },
+      siteType: 'tent',
+    },
+  ]);
+  assert.equal(result.ok, true);
+});
+
+test('parseWatches accepts an area watch with an empty areas array (no gate-keeping)', () => {
+  const result = parseWatches([
+    {
+      type: 'area',
+      id: 'x',
+      areas: [],
+      dateRange: { start: '2026-09-01', end: '2026-09-03' },
+      siteType: 'tent',
+    },
+  ]);
+  assert.equal(result.ok, true);
+});
+
+test('MatchedSlotSchema accepts a slot with facilityType: group', () => {
+  const result = parseRunLog([
+    {
+      ...validRun,
+      outcomes: [
+        {
+          watchId: 'w',
+          status: 'MATCH',
+          newMatches: [
+            {
+              watchId: 'w',
+              campsiteId: '1',
+              siteLabel: '001',
+              loop: 'A',
+              siteType: 'group',
+              facilityId: 1,
+              facilityName: 'Group Camp',
+              facilityType: 'group',
+              startDate: '2026-09-01',
+              endDate: '2026-09-02',
+              bookingUrl: 'https://www.recreation.gov/camping/campsites/1',
+            },
+          ],
+          suppressed: [],
+        },
+      ],
+    },
+  ]);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.data.length, 1);
+    assert.equal(result.skipped, 0);
+  }
+});
+
+test('MatchedSlotSchema defaults facilityType to standard when absent (pre-Phase-4 runs.json)', () => {
+  const result = parseRunLog([validRun]);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.data.length, 1);
+    assert.equal(result.skipped, 0);
+    const outcome = result.data[0]!.outcomes[0];
+    if (outcome && outcome.status === 'MATCH') {
+      assert.equal(outcome.newMatches[0]!.facilityType, 'standard');
+    }
+  }
+});
+
+test('WatchOutcomeSchema accepts a NO_MATCH outcome with a truncated field', () => {
+  const result = parseRunLog([
+    { ...validRun, outcomes: [{ watchId: 'a', status: 'NO_MATCH', truncated: { requested: 34, kept: 20 } }] },
+  ]);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.data.length, 1);
+    assert.equal(result.skipped, 0);
+  }
+});
+
+test('WatchOutcomeSchema still accepts a NO_MATCH outcome with no truncated field', () => {
+  const result = parseRunLog([{ ...validRun, outcomes: [{ watchId: 'a', status: 'NO_MATCH' }] }]);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.data.length, 1);
+    assert.equal(result.skipped, 0);
+  }
+});

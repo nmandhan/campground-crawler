@@ -5,7 +5,7 @@
  *  (lines 91-104): every WatchOutcome variant is handled, with no silent fallthrough.
  */
 import type { Watch, RunLogEntry } from './types';
-import { formatDateRange, formatRelativeTime } from './format';
+import { formatDateRange, formatRelativeTime, watchLabel } from './format';
 
 export type WatchStatus = 'MATCH' | 'NO_MATCH' | 'FAILED' | 'UNKNOWN';
 
@@ -20,6 +20,21 @@ export interface WatchStatusRow {
   observedRelative: string; // formatRelativeTime(observedAt, now), or '—' when null
 }
 
+function outcomeSuffix(outcome: {
+  truncated?: { requested: number; kept: number };
+  facilityFailures?: unknown[];
+}): string {
+  const parts: string[] = [];
+  if (outcome.truncated) {
+    parts.push(`showing ${outcome.truncated.kept} of ${outcome.truncated.requested} campgrounds`);
+  }
+  const failed = outcome.facilityFailures?.length ?? 0;
+  if (failed > 0) {
+    parts.push(`${failed} ${failed === 1 ? 'campground' : 'campgrounds'} could not be checked`);
+  }
+  return parts.length === 0 ? '' : ` — ${parts.join('; ')}`;
+}
+
 export function deriveWatchStatuses(
   watches: Watch[],
   runs: RunLogEntry[],
@@ -32,6 +47,7 @@ export function deriveWatchStatuses(
 
   return watches.map((watch) => {
     const dateRangeLabel = formatDateRange(watch.dateRange.start, watch.dateRange.end);
+    const label = watchLabel(watch);
 
     for (const run of sortedRuns) {
       const outcome = run.outcomes.find((o) => o.watchId === watch.id);
@@ -43,10 +59,10 @@ export function deriveWatchStatuses(
       if (outcome.status === 'MATCH') {
         const total = outcome.newMatches.length + outcome.suppressed.length;
         const siteNoun = total === 1 ? 'site' : 'sites';
-        const detail = `${total} ${siteNoun} available (${outcome.newMatches.length} new)`;
+        const detail = `${total} ${siteNoun} available (${outcome.newMatches.length} new)${outcomeSuffix(outcome)}`;
         return {
           watchId: watch.id,
-          parkName: watch.parkName,
+          parkName: label,
           dateRangeLabel,
           siteType: watch.siteType,
           status: 'MATCH' as const,
@@ -57,22 +73,22 @@ export function deriveWatchStatuses(
       } else if (outcome.status === 'NO_MATCH') {
         return {
           watchId: watch.id,
-          parkName: watch.parkName,
+          parkName: label,
           dateRangeLabel,
           siteType: watch.siteType,
           status: 'NO_MATCH' as const,
-          detail: 'No matching availability',
+          detail: `No matching availability${outcomeSuffix(outcome)}`,
           observedAt,
           observedRelative,
         };
       } else if (outcome.status === 'FAILED') {
         return {
           watchId: watch.id,
-          parkName: watch.parkName,
+          parkName: label,
           dateRangeLabel,
           siteType: watch.siteType,
           status: 'FAILED' as const,
-          detail: outcome.reason,
+          detail: `${outcome.reason}${outcomeSuffix(outcome)}`,
           observedAt,
           observedRelative,
         };
@@ -81,7 +97,7 @@ export function deriveWatchStatuses(
 
     return {
       watchId: watch.id,
-      parkName: watch.parkName,
+      parkName: label,
       dateRangeLabel,
       siteType: watch.siteType,
       status: 'UNKNOWN' as const,

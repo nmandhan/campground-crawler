@@ -3,8 +3,8 @@
  *  Pure module: no `fetch`, no `console`, no ambient clock read — `now: Date` is always an
  *  explicit parameter. Imports only from `./types` and `./format`.
  */
-import type { StateFile, Watch, RunLogEntry } from './types';
-import { formatDateRange, formatRelativeTime } from './format';
+import type { StateFile, Watch, RunLogEntry, MatchedSlot } from './types';
+import { formatDateRange, formatRelativeTime, watchLabel } from './format';
 
 export interface ActiveMatchRow {
   key: string;
@@ -55,6 +55,23 @@ function findLatestRun(runs: RunLogEntry[]): RunLogEntry | null {
   return latest;
 }
 
+function findMatchedSlot(
+  latestRun: RunLogEntry | null,
+  watchId: string,
+  campsiteId: string,
+  startDate: string,
+  endDate: string,
+): MatchedSlot | null {
+  if (!latestRun) return null;
+  const outcome = latestRun.outcomes.find((o) => o.watchId === watchId);
+  if (!outcome || outcome.status !== 'MATCH') return null;
+  const slots = [...outcome.newMatches, ...outcome.suppressed];
+  return (
+    slots.find((s) => s.campsiteId === campsiteId && s.startDate === startDate && s.endDate === endDate) ??
+    null
+  );
+}
+
 function isStillOpen(
   latestRun: RunLogEntry | null,
   watchId: string,
@@ -85,7 +102,15 @@ export function deriveActiveMatches(
     if (!parsed) continue;
 
     const { watchId, campsiteId, startDate, endDate } = parsed;
-    const parkName = watches.find((w) => w.id === watchId)?.parkName ?? watchId;
+    // AREA-05: name the campground that actually matched, not just the watch's area(s).
+    // MatchedSlot already carries facilityId/facilityName per match, so attribution costs
+    // no new poller field. D-05: a group campground is flagged unmistakably, because the
+    // user's real use case is 1-2 tent sites and a group site must never look like one.
+    const slot = findMatchedSlot(latest, watchId, campsiteId, startDate, endDate);
+    const watch = watches.find((w) => w.id === watchId);
+    const parkName = slot
+      ? `${slot.facilityName}${slot.facilityType === 'group' ? ' [GROUP]' : ''}`
+      : (watch ? watchLabel(watch) : watchId);
 
     rows.push({
       key,
