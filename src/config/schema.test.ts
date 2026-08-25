@@ -92,3 +92,109 @@ test('watches.example.json validates against WatchesFileSchema', () => {
   const result = WatchesFileSchema.parse(raw);
   assert.ok(result.length >= 1);
 });
+
+test('a type-less watch entry migrates to type: facility (backward compatibility)', () => {
+  const result = WatchSchema.safeParse({
+    id: 'kirk',
+    parkName: 'Kirk Creek',
+    dateRange: { start: '2026-09-01', end: '2026-09-03' },
+    siteType: 'tent',
+  });
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.data.type, 'facility');
+  }
+});
+
+test('an explicit type: facility watch with facilityId override parses', () => {
+  const result = WatchSchema.safeParse({
+    type: 'facility',
+    id: 'kirk',
+    parkName: 'Kirk Creek',
+    facilityId: 232447,
+    dateRange: { start: '2026-09-01', end: '2026-09-03' },
+    siteType: 'tent',
+  });
+  assert.equal(result.success, true);
+});
+
+test('a type: area watch with a non-empty areas list parses', () => {
+  const result = WatchSchema.safeParse({
+    type: 'area',
+    id: 'sierra',
+    areas: [{ name: 'Sequoia National Forest' }, { name: 'Sierra National Forest', recAreaId: 1106 }],
+    dateRange: { start: '2026-09-01', end: '2026-09-03' },
+    siteType: 'tent',
+  });
+  assert.equal(result.success, true);
+});
+
+test('a type: area watch with an empty areas array is rejected', () => {
+  const result = WatchSchema.safeParse({
+    type: 'area',
+    id: 'x',
+    areas: [],
+    dateRange: { start: '2026-09-01', end: '2026-09-03' },
+    siteType: 'tent',
+  });
+  assert.equal(result.success, false);
+  if (!result.success) {
+    const messages = result.error.issues.map((i) => i.message);
+    assert.ok(messages.some((m) => m.includes('at least one area')));
+  }
+});
+
+test('a type: area watch with a blank area name is rejected', () => {
+  const result = WatchSchema.safeParse({
+    type: 'area',
+    id: 'x',
+    areas: [{ name: '' }],
+    dateRange: { start: '2026-09-01', end: '2026-09-03' },
+    siteType: 'tent',
+  });
+  assert.equal(result.success, false);
+});
+
+test('a type: area watch with a negative recAreaId is rejected', () => {
+  const result = WatchSchema.safeParse({
+    type: 'area',
+    id: 'x',
+    areas: [{ name: 'Y', recAreaId: -3 }],
+    dateRange: { start: '2026-09-01', end: '2026-09-03' },
+    siteType: 'tent',
+  });
+  assert.equal(result.success, false);
+});
+
+test('an area watch with dateRange.start >= dateRange.end is rejected with the exclusive-checkout message', () => {
+  const result = WatchSchema.safeParse({
+    type: 'area',
+    id: 'x',
+    areas: [{ name: 'Y' }],
+    dateRange: { start: '2026-09-04', end: '2026-09-01' },
+    siteType: 'tent',
+  });
+  assert.equal(result.success, false);
+  if (!result.success) {
+    const messages = result.error.issues.map((i) => i.message);
+    assert.ok(messages.some((m) => m.includes('exclusive checkout date')));
+  }
+});
+
+test('duplicate watch ids across mixed-variant watches are rejected', () => {
+  const facilityWatch = {
+    id: 'dup',
+    parkName: 'Some Park',
+    dateRange: { start: '2026-09-01', end: '2026-09-04' },
+    siteType: 'tent' as const,
+  };
+  const areaWatch = {
+    type: 'area' as const,
+    id: 'dup',
+    areas: [{ name: 'Some Area' }],
+    dateRange: { start: '2026-09-01', end: '2026-09-04' },
+    siteType: 'tent' as const,
+  };
+  const result = WatchesFileSchema.safeParse([facilityWatch, areaWatch]);
+  assert.equal(result.success, false);
+});

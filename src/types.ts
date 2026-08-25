@@ -1,14 +1,14 @@
 export type SiteType = 'any' | 'tent' | 'rv' | 'group';
 export type ResolvedSiteType = 'tent' | 'rv' | 'group' | 'unknown';
 
-/** A watch as authored in watches.json. `start` is the first night; `end` is the
- *  checkout date (exclusive). Nights required = [start, end).
+/** A single pinned campground, resolved by name via RIDB (v1.0 shape).
  *
  *  dateRange semantics (D-03): `dateRange.start` = first night; `dateRange.end` =
  *  checkout date, EXCLUSIVE. Required nights = every date from `start` up to but
  *  NOT including `end` — this represents one continuous bookable stay, no gaps.
  */
-export interface Watch {
+export interface FacilityWatch {
+  type: 'facility';
   id: string;
   parkName: string;
   facilityId?: number;      // optional explicit override (RESEARCH Pitfall 3)
@@ -16,10 +16,34 @@ export interface Watch {
   siteType: SiteType;
 }
 
-/** A Watch after RIDB name->facilityId resolution (D-02). */
-export interface ResolvedWatch extends Watch {
+/** One or more named Recreation Areas, expanded to their constituent campgrounds
+ *  at poll time (AREA-01/D-01). Stores CRITERIA ONLY — never a frozen resolved
+ *  facility list (ARCHITECTURE.md Anti-Pattern 1). `recAreaId` is the explicit
+ *  override for a bad name auto-match (D-02); it skips the /recareas name search
+ *  but NOT the /recareas/{id}/facilities expansion. */
+export interface AreaWatch {
+  type: 'area';
+  id: string;
+  areas: Array<{ name: string; recAreaId?: number }>;
+  dateRange: { start: string; end: string };  // YYYY-MM-DD
+  siteType: SiteType;
+}
+
+export type Watch = FacilityWatch | AreaWatch;
+
+/** A Watch after resolution to ONE concrete facility. An AreaWatch produces N of
+ *  these sharing one `id`; a FacilityWatch produces exactly one. Deliberately flat
+ *  (no `extends Watch`) now that Watch is a union. */
+export interface ResolvedWatch {
+  id: string;
   facilityId: number;
   facilityName: string;
+  /** D-05: 'group' when RIDB's FacilityTypeDescription matches /group/i, else 'standard'.
+   *  A FacilityWatch always resolves to 'standard' — v1.0 never classified, and the
+   *  user's pinned campground is theirs by definition. */
+  facilityType: 'standard' | 'group';
+  dateRange: { start: string; end: string };
+  siteType: SiteType;
 }
 
 /** One campsite on one night, normalized from the availability endpoint.
@@ -51,15 +75,43 @@ export interface MatchedSlot {
   siteType: ResolvedSiteType;
   facilityId: number;
   facilityName: string;
+  // D-05: carried from ResolvedWatch so match output can flag a group campground unmistakably
+  facilityType: 'standard' | 'group';
   startDate: string;        // YYYY-MM-DD, first night
   endDate: string;          // YYYY-MM-DD, checkout (exclusive)
   bookingUrl: string;       // https://www.recreation.gov/camping/campsites/{campsiteId}
 }
 
+/** D-08: present only when an area watch's resolution exceeded AREA_FACILITY_CAP.
+ *  `requested` is the post-filter facility count across all the watch's areas;
+ *  `kept` is how many actually got polled. */
+export interface TruncationInfo {
+  requested: number;
+  kept: number;
+}
+
+/** RESEARCH.md Open Question 3 — RESOLVED: per-facility failures inside an area
+ *  watch degrade gracefully. One flaky campground must never hide matches found on
+ *  its siblings, matching resolveWatches()'s existing "a failure never aborts the
+ *  run for the others" convention one level deeper. A watch is only FAILED when
+ *  EVERY facility in its group failed. */
+export interface FacilityFailure {
+  facilityId: number;
+  facilityName: string;
+  reason: string;
+}
+
 export type WatchOutcome =
-  | { watchId: string; status: 'MATCH'; newMatches: MatchedSlot[]; suppressed: MatchedSlot[] }
-  | { watchId: string; status: 'NO_MATCH' }
-  | { watchId: string; status: 'FAILED'; reason: string };
+  | {
+      watchId: string;
+      status: 'MATCH';
+      newMatches: MatchedSlot[];
+      suppressed: MatchedSlot[];
+      truncated?: TruncationInfo;
+      facilityFailures?: FacilityFailure[];
+    }
+  | { watchId: string; status: 'NO_MATCH'; truncated?: TruncationInfo; facilityFailures?: FacilityFailure[] }
+  | { watchId: string; status: 'FAILED'; reason: string; truncated?: TruncationInfo; facilityFailures?: FacilityFailure[] };
 
 /** Returned by run(); Phase 2 wires email off this without changing run()'s shape (D-07). */
 export interface RunSummary {
