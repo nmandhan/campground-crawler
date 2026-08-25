@@ -36,7 +36,15 @@ Full details archived: `.planning/milestones/v1.0-ROADMAP.md`
   2. Area watch facility resolution automatically excludes non-campground facility types (visitor centers, boat ramps, group day-use areas), preventing a wrong-match failure at region scale
   3. Area watches are capped at a maximum combined facility count (~15-25), with a truncation indicator shown when the cap is hit
   4. When an area watch matches an available site, the notification/dashboard output identifies the specific campground(s) that matched, not just the area name
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Capture live RIDB `/recareas` + `/recareas/{id}/facilities` shapes, land the two response schemas
+- [ ] 04-02-PLAN.md — `Watch` becomes a `FacilityWatch | AreaWatch` discriminated union (types + config schema, backward compatible)
+- [ ] 04-03-PLAN.md — `resolveArea()` / `listAreaFacilities()` with the campground allowlist, group tagging, and bounded hydration
+- [ ] 04-04-PLAN.md — Mirror the union into the dashboard; area labels, per-campground match attribution, truncation display
+- [ ] 04-05-PLAN.md — `resolveWatches()` area branch: per-run cache, dedup, shared 20-facility cap, truncation bookkeeping
+- [ ] 04-06-PLAN.md — `run.ts` group-by-watch-id aggregation, per-facility failure isolation, `[GROUP]` tag in the digest
 
 ### Phase 5: Watch-Management Write Path
 **Goal**: User can fully manage watches — including area watches discoverable by name — through the dashboard UI, without hand-editing `watches.json`, with write actions gated behind a shared secret while existing read-only views stay public.
@@ -61,6 +69,6 @@ Phases execute in numeric order: 4 → 5
 | 1. Core Polling Engine | v1.0 | 4/4 | Complete | 2026-08-22 |
 | 2. Notification Delivery & Deployment | v1.0 | 3/4 | Complete (known gap) | 2026-08-25 |
 | 3. Status Dashboard | v1.0 | 5/5 | Complete | 2026-08-25 |
-| 4. Area-Based Search | v1.1 | 0/TBD | Not started | - |
+| 4. Area-Based Search | v1.1 | 0/6 | Planned | - |
 | 5. Watch-Management Write Path | v1.1 | 0/TBD | Not started | - |
 </content>
