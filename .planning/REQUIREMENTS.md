@@ -56,23 +56,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AREA-01 | TBD | Pending |
-| AREA-02 | TBD | Pending |
-| AREA-03 | TBD | Pending |
-| AREA-04 | TBD | Pending |
-| AREA-05 | TBD | Pending |
-| MGMT-01 | TBD | Pending |
-| MGMT-02 | TBD | Pending |
-| MGMT-03 | TBD | Pending |
-| MGMT-04 | TBD | Pending |
-| MGMT-05 | TBD | Pending |
-| MGMT-06 | TBD | Pending |
+| AREA-01 | Phase 4 | Pending |
+| AREA-02 | Phase 4 | Pending |
+| AREA-03 | Phase 4 | Pending |
+| AREA-04 | Phase 5 | Pending |
+| AREA-05 | Phase 4 | Pending |
+| MGMT-01 | Phase 5 | Pending |
+| MGMT-02 | Phase 5 | Pending |
+| MGMT-03 | Phase 5 | Pending |
+| MGMT-04 | Phase 5 | Pending |
+| MGMT-05 | Phase 5 | Pending |
+| MGMT-06 | Phase 5 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 11 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 11 ⚠️ (expected before roadmap step)
+- Mapped to phases: 11 (Phase 4: AREA-01, AREA-02, AREA-03, AREA-05; Phase 5: AREA-04, MGMT-01..06)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-25*
-*Last updated: 2026-08-25 after milestone v1.1 requirements definition*
+*Last updated: 2026-08-25 after v1.1 roadmap creation (Phase 4, Phase 5)*
