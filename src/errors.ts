@@ -43,6 +43,19 @@ export class FacilityNotFoundError extends Error {
   }
 }
 
+/** Thrown when a RecArea name in watches.json matches nothing in RIDB's /recareas
+ *  search (AREA-01). The area name is developer-authored config, never a secret,
+ *  so echoing it back is safe — unlike request headers or the apikey. */
+export class RecAreaNotFoundError extends Error {
+  constructor(
+    message: string,
+    readonly areaName: string
+  ) {
+    super(message);
+    this.name = 'RecAreaNotFoundError';
+  }
+}
+
 /**
  * One-line human-readable failure reason for the FAILED log line + RunSummary.
  *
@@ -61,6 +74,9 @@ export function describeFailure(err: unknown): string {
   }
   if (err instanceof FacilityNotFoundError) {
     return `no Recreation.gov facility found for "${err.parkName}"`;
+  }
+  if (err instanceof RecAreaNotFoundError) {
+    return `no Recreation.gov recreation area found for "${err.areaName}"`;
   }
   if (err instanceof Error) {
     return err.message;
