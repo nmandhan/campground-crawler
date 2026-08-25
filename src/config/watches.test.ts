@@ -97,8 +97,8 @@ test('two watches with the same parkName trigger exactly one resolveFacility cal
     'Upper Pines Campground': { facilityId: 100, facilityName: 'Upper Pines', alternatives: [] },
   });
   const watches: Watch[] = [
-    { id: 'w1', parkName: 'Upper Pines Campground', dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
-    { id: 'w2', parkName: 'Upper Pines Campground', dateRange: { start: '2026-10-04', end: '2026-10-07' }, siteType: 'any' },
+    { type: 'facility', id: 'w1', parkName: 'Upper Pines Campground', dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
+    { type: 'facility', id: 'w2', parkName: 'Upper Pines Campground', dateRange: { start: '2026-10-04', end: '2026-10-07' }, siteType: 'any' },
   ];
   const { logger } = recordingLogger();
   const { resolved, failures } = await resolveWatches(watches, { resolve, logger });
@@ -116,8 +116,8 @@ test('two watches with different parkNames trigger two resolveFacility calls', a
     'Kirk Creek Campground': { facilityId: 200, facilityName: 'Kirk Creek', alternatives: [] },
   });
   const watches: Watch[] = [
-    { id: 'w1', parkName: 'Upper Pines Campground', dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
-    { id: 'w2', parkName: 'Kirk Creek Campground', dateRange: { start: '2026-10-04', end: '2026-10-07' }, siteType: 'any' },
+    { type: 'facility', id: 'w1', parkName: 'Upper Pines Campground', dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
+    { type: 'facility', id: 'w2', parkName: 'Kirk Creek Campground', dateRange: { start: '2026-10-04', end: '2026-10-07' }, siteType: 'any' },
   ];
   const { resolved, failures } = await resolveWatches(watches, { resolve, logger: recordingLogger().logger });
   assert.equal(callLog.length, 2);
@@ -129,7 +129,7 @@ test('a watch with an explicit facilityId triggers zero resolveFacility calls an
   const callLog: string[] = [];
   const resolve = fakeResolve(callLog, {});
   const watches: Watch[] = [
-    { id: 'w1', parkName: 'Some Park', facilityId: 999, dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
+    { type: 'facility', id: 'w1', parkName: 'Some Park', facilityId: 999, dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
   ];
   const { resolved, failures } = await resolveWatches(watches, { resolve, logger: recordingLogger().logger });
   assert.equal(callLog.length, 0);
@@ -145,7 +145,7 @@ test('each resolved watch carries facilityId and facilityName', async () => {
     'Upper Pines Campground': { facilityId: 100, facilityName: 'Upper Pines Official Name', alternatives: [] },
   });
   const watches: Watch[] = [
-    { id: 'w1', parkName: 'Upper Pines Campground', dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
+    { type: 'facility', id: 'w1', parkName: 'Upper Pines Campground', dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
   ];
   const { resolved } = await resolveWatches(watches, { resolve, logger: recordingLogger().logger });
   assert.equal(resolved[0]!.facilityId, 100);
@@ -158,8 +158,8 @@ test('resolution logs one line per unique name including resolved id and name, a
     'Upper Pines Campground': { facilityId: 100, facilityName: 'Upper Pines', alternatives: ['Lower Pines', 'North Pines'] },
   });
   const watches: Watch[] = [
-    { id: 'w1', parkName: 'Upper Pines Campground', dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
-    { id: 'w2', parkName: 'Upper Pines Campground', dateRange: { start: '2026-10-04', end: '2026-10-07' }, siteType: 'any' },
+    { type: 'facility', id: 'w1', parkName: 'Upper Pines Campground', dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
+    { type: 'facility', id: 'w2', parkName: 'Upper Pines Campground', dateRange: { start: '2026-10-04', end: '2026-10-07' }, siteType: 'any' },
   ];
   const { logger, info, warn } = recordingLogger();
   await resolveWatches(watches, { resolve, logger });
@@ -176,8 +176,8 @@ test('a FacilityNotFoundError for one watch does not prevent the other watches f
     'Upper Pines Campground': { facilityId: 100, facilityName: 'Upper Pines', alternatives: [] },
   });
   const watches: Watch[] = [
-    { id: 'w1', parkName: 'Bad Park Name', dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
-    { id: 'w2', parkName: 'Upper Pines Campground', dateRange: { start: '2026-10-04', end: '2026-10-07' }, siteType: 'any' },
+    { type: 'facility', id: 'w1', parkName: 'Bad Park Name', dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
+    { type: 'facility', id: 'w2', parkName: 'Upper Pines Campground', dateRange: { start: '2026-10-04', end: '2026-10-07' }, siteType: 'any' },
   ];
   const { resolved, failures } = await resolveWatches(watches, { resolve, logger: recordingLogger().logger });
   assert.equal(resolved.length, 1);
@@ -185,4 +185,39 @@ test('a FacilityNotFoundError for one watch does not prevent the other watches f
   assert.equal(failures.length, 1);
   assert.equal(failures[0]!.watchId, 'w1');
   assert.match(failures[0]!.reason, /no Recreation\.gov facility found/);
+});
+
+test('resolveWatches([]) returns empty resolved, failures, and truncations', async () => {
+  const { resolved, failures, truncations } = await resolveWatches([], {
+    logger: recordingLogger().logger,
+  });
+  assert.deepEqual(resolved, []);
+  assert.deepEqual(failures, []);
+  assert.deepEqual(truncations, []);
+});
+
+test('a resolved facility watch has no parkName, type, or areas key (flat shape only)', async () => {
+  const callLog: string[] = [];
+  const resolve = fakeResolve(callLog, {
+    'Upper Pines Campground': { facilityId: 100, facilityName: 'Upper Pines', alternatives: [] },
+  });
+  const watches: Watch[] = [
+    { type: 'facility', id: 'w1', parkName: 'Upper Pines Campground', dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
+  ];
+  const { resolved } = await resolveWatches(watches, { resolve, logger: recordingLogger().logger });
+  const entry = resolved[0]! as unknown as Record<string, unknown>;
+  assert.equal('parkName' in entry, false);
+  assert.equal('type' in entry, false);
+  assert.equal('areas' in entry, false);
+  assert.equal(entry.facilityType, 'standard');
+});
+
+test('a pinned facility watch (explicit facilityId) yields facilityType "standard"', async () => {
+  const callLog: string[] = [];
+  const resolve = fakeResolve(callLog, {});
+  const watches: Watch[] = [
+    { type: 'facility', id: 'w1', parkName: 'Some Park', facilityId: 999, dateRange: { start: '2026-09-04', end: '2026-09-07' }, siteType: 'any' },
+  ];
+  const { resolved } = await resolveWatches(watches, { resolve, logger: recordingLogger().logger });
+  assert.equal(resolved[0]!.facilityType, 'standard');
 });

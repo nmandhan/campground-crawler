@@ -4,9 +4,13 @@
  */
 import { readFile } from 'node:fs/promises';
 import { WatchesFileSchema } from './schema.js';
-import { resolveFacility, type ClientOptions, type ResolvedFacility } from '../recreation-gov/client.js';
+import {
+  resolveFacility as defaultResolveFacility,
+  type ClientOptions,
+  type ResolvedFacility,
+} from '../recreation-gov/client.js';
 import { describeFailure } from '../errors.js';
-import type { Watch, ResolvedWatch } from '../types.js';
+import type { Watch, ResolvedWatch, TruncationInfo } from '../types.js';
 
 export const DEFAULT_WATCHES_PATH = 'watches.json';
 
@@ -52,11 +56,14 @@ export async function loadWatches(path?: string): Promise<Watch[]> {
 export interface ResolveResult {
   resolved: ResolvedWatch[];
   failures: Array<{ watchId: string; reason: string }>;
+  /** D-08: one entry per watch whose area resolution exceeded AREA_FACILITY_CAP.
+   *  Empty for facility watches and for area watches under the cap. */
+  truncations: Array<{ watchId: string } & TruncationInfo>;
 }
 
 export interface ResolveWatchesOptions extends ClientOptions {
   logger?: Logger;
-  resolve?: typeof resolveFacility;
+  resolve?: typeof defaultResolveFacility;
 }
 
 export async function resolveWatches(
@@ -64,57 +71,69 @@ export async function resolveWatches(
   opts?: ResolveWatchesOptions
 ): Promise<ResolveResult> {
   const logger = opts?.logger ?? console;
-  const resolve = opts?.resolve ?? resolveFacility;
-  const cache = new Map<string, Promise<ResolvedFacility>>();
+  const resolve = opts?.resolve ?? defaultResolveFacility;
+  const facilityCache = new Map<string, Promise<ResolvedFacility>>();
   const loggedNames = new Set<string>();
 
   const resolved: ResolvedWatch[] = [];
   const failures: Array<{ watchId: string; reason: string }> = [];
+  const truncations: ResolveResult['truncations'] = [];
 
   for (const watch of watches) {
     try {
-      if (watch.facilityId !== undefined) {
+      if (watch.type === 'facility') {
+        if (watch.facilityId !== undefined) {
+          resolved.push({
+            id: watch.id,
+            facilityId: watch.facilityId,
+            facilityName: watch.parkName,
+            facilityType: 'standard',
+            dateRange: watch.dateRange,
+            siteType: watch.siteType,
+          });
+          continue;
+        }
+
+        const cacheKey = watch.parkName.trim().toLowerCase();
+        let pending = facilityCache.get(cacheKey);
+        if (!pending) {
+          pending = resolve(watch.parkName, opts);
+          facilityCache.set(cacheKey, pending);
+        }
+        const facility = await pending;
+
+        if (!loggedNames.has(cacheKey)) {
+          loggedNames.add(cacheKey);
+          logger.info(
+            `resolved "${watch.parkName}" -> facility ${facility.facilityId} (${facility.facilityName})`
+          );
+          if (facility.alternatives.length > 0) {
+            logger.warn(
+              `  other RIDB matches for "${watch.parkName}": ${facility.alternatives.join(
+                ', '
+              )} — set "facilityId" in watches.json if this resolved to the wrong campground`
+            );
+          }
+        }
+
         resolved.push({
-          ...watch,
-          facilityId: watch.facilityId,
-          facilityName: watch.parkName,
+          id: watch.id,
+          facilityId: facility.facilityId,
+          facilityName: facility.facilityName,
+          facilityType: 'standard',
+          dateRange: watch.dateRange,
+          siteType: watch.siteType,
         });
         continue;
       }
 
-      const cacheKey = watch.parkName.trim().toLowerCase();
-      let pending = cache.get(cacheKey);
-      if (!pending) {
-        pending = resolve(watch.parkName, opts);
-        cache.set(cacheKey, pending);
-      }
-      const facility = await pending;
-
-      if (!loggedNames.has(cacheKey)) {
-        loggedNames.add(cacheKey);
-        logger.info(
-          `resolved "${watch.parkName}" -> facility ${facility.facilityId} (${facility.facilityName})`
-        );
-        if (facility.alternatives.length > 0) {
-          logger.warn(
-            `  other RIDB matches for "${watch.parkName}": ${facility.alternatives.join(
-              ', '
-            )} — set "facilityId" in watches.json if this resolved to the wrong campground`
-          );
-        }
-      }
-
-      resolved.push({
-        ...watch,
-        facilityId: facility.facilityId,
-        facilityName: facility.facilityName,
-      });
+      // watch.type === 'area' — implemented in Task 2 of this plan.
     } catch (err) {
       failures.push({ watchId: watch.id, reason: describeFailure(err) });
     }
   }
 
-  return { resolved, failures };
+  return { resolved, failures, truncations };
 }
 
 export async function loadResolvedWatches(
