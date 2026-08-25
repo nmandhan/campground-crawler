@@ -57,11 +57,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 5 plans (4 waves)
 
 Plans:
-- [ ] 03-01-PLAN.md — Run-summary file writer, cli.ts wiring, workflow append-and-cap of a 50-entry runs.json (D-01, D-02)
-- [ ] 03-02-PLAN.md — dashboard/ Next.js scaffold, local types, GitHub raw fetch helper, zod validation (D-03, D-08)
-- [ ] 03-03-PLAN.md — Pure derivations: active matches, per-watch status, run timeline, time/date formatting (D-05, D-06, D-07)
-- [ ] 03-04-PLAN.md — UI-SPEC design tokens, copy constants, view-model assembly, App Router page rendering the three sections (D-04..D-08)
-- [ ] 03-05-PLAN.md — Vercel deploy (Root Directory = dashboard), live verification, README URL record (D-03, D-04, D-08)
+- [x] 03-01-PLAN.md — Run-summary file writer, cli.ts wiring, workflow append-and-cap of a 50-entry runs.json (D-01, D-02)
+- [x] 03-02-PLAN.md — dashboard/ Next.js scaffold, local types, GitHub raw fetch helper, zod validation (D-03, D-08)
+- [x] 03-03-PLAN.md — Pure derivations: active matches, per-watch status, run timeline, time/date formatting (D-05, D-06, D-07)
+- [x] 03-04-PLAN.md — UI-SPEC design tokens, copy constants, view-model assembly, App Router page rendering the three sections (D-04..D-08)
+- [x] 03-05-PLAN.md — Vercel deploy (Root Directory = dashboard), live verification, README URL record (D-03, D-04, D-08)
 
 ## Progress
 
