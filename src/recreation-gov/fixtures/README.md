@@ -45,3 +45,40 @@ Pattern 1's documented `{ RECDATA: [...], METADATA: {...} }` envelope shape
 (Assumption A1), which remains **unvalidated** against a live authenticated
 response. Re-validate this fixture's envelope shape the first time a real
 `RIDB_API_KEY` is available (e.g. via `scripts/capture-fixtures.ts`).
+
+## `ridb-recareas.json`
+
+**live-captured, captured 2026-08-25**
+
+Captured via `scripts/capture-recarea-fixtures.ts "Yosemite National Park"` against the live
+`GET /recareas?query=Yosemite%20National%20Park` endpoint (RecArea search). The top text match
+resolved to RecArea ID `2986`, `"Wrangell - St Elias National Park & Preserve"` — a real RIDB
+fuzzy-text-match quirk (the query string did not exactly match a RecArea name), not a bug in the
+capture script. This is consistent with D-02/D-03 (auto-pick top match, no fail-closed behavior)
+already locked in `04-CONTEXT.md`, and is a concrete example of why the `alternatives` field
+(surfaced by `resolveFacility`-style callers) matters for a RecArea resolver. `RECDATA` entries use
+`RecAreaID` (string, e.g. `"2986"`) and `RecAreaName` — the exact keys `RidbRecAreaSchema` expects.
+
+## `ridb-recarea-facilities.json`
+
+**live-captured, captured 2026-08-25**
+
+Captured via `scripts/capture-recarea-fixtures.ts` against the live
+`GET /recareas/2986/facilities` endpoint for RecArea `2986`
+(`"Wrangell - St Elias National Park & Preserve"`, the RecArea resolved above).
+
+Open Question 1 (RESEARCH.md, Assumption A2) — RESOLVED: GET /recareas/{id}/facilities returns
+full Facility records. Observed keys: ACTIVITY, CAMPSITE, EVENT, Enabled, FACILITYADDRESS,
+FacilityAccessibilityText, FacilityAdaAccess, FacilityDescription, FacilityDirections,
+FacilityEmail, FacilityID, FacilityLatitude, FacilityLongitude, FacilityMapURL, FacilityName,
+FacilityPhone, FacilityReservationURL, FacilityTypeDescription, FacilityUseFeeDescription,
+GEOJSON, Keywords, LINK, LastUpdatedDate, LegacyFacilityID, MEDIA, ORGANIZATION, OrgFacilityID,
+PERMITENTRANCE, ParentOrgID, ParentRecAreaID, RECAREA, Reservable, StayLimit, TOUR. Observed
+FacilityTypeDescription values: Activity Pass | Campground | Facility | Permit | Tree Permit |
+Venue Reservations (aggregated across Yosemite National Park query, Sequoia National Forest query,
+and Lake Tahoe Basin Management Unit query capture runs).
+
+Both `FacilityTypeDescription` and `Reservable` are present on every observed record — this is the
+"full record" shape, not the compact 3-field stub. `RidbRecAreaFacilitiesSchema` still keeps both
+fields `.optional()` (mirroring `RidbFacilitySchema`) as defensive parsing, since RIDB's schema is
+undocumented and not formally guaranteed to stay this way.

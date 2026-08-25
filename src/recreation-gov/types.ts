@@ -34,5 +34,27 @@ export const RidbFacilitySearchSchema = z.object({
   METADATA: z.unknown().optional(),
 });
 
+export const RidbRecAreaSchema = z.object({
+  RecAreaID: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+  RecAreaName: z.string(),
+});
+
+export const RidbRecAreaSearchSchema = z.object({
+  RECDATA: z.array(RidbRecAreaSchema),
+  METADATA: z.unknown().optional(),
+});
+
+/** `/recareas/{id}/facilities` may return either a full Facility record or a
+ *  compact stub (RESEARCH.md Open Question 1). RidbFacilitySchema already makes
+ *  FacilityTypeDescription/Reservable optional, so it covers BOTH shapes —
+ *  a stub simply parses with those two fields `undefined`, which the resolver
+ *  treats as "needs hydration" rather than as a parse failure. */
+export const RidbRecAreaFacilitiesSchema = z.object({
+  RECDATA: z.array(RidbFacilitySchema),
+  METADATA: z.unknown().optional(),
+});
+
 export type RawAvailabilityResponse = z.infer<typeof AvailabilityResponseSchema>;
 export type RidbFacility = z.infer<typeof RidbFacilitySchema>;
+export type RidbRecArea = z.infer<typeof RidbRecAreaSchema>;
+export type RidbRecAreaFacilities = z.infer<typeof RidbRecAreaFacilitiesSchema>;
