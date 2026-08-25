@@ -1,0 +1,124 @@
+{
+  "METADATA": {
+    "RESULTS": {
+      "CURRENT_COUNT": 4,
+      "TOTAL_COUNT": 4
+    },
+    "SEARCH_PARAMETERS": {
+      "LIMIT": 10,
+      "OFFSET": 0,
+      "QUERY": "Yosemite National Park"
+    }
+  },
+  "RECDATA": [
+    {
+      "Enabled": true,
+      "GEOJSON": {
+        "COORDINATES": [
+          -142.602844,
+          61.418215
+        ],
+        "TYPE": "Point"
+      },
+      "Keywords": "Arts and Culture,Auto and ATV,Biking,Boating,Camping,Climbing,Fishing,Picnicking,Hiking,Hunting,Paddling,Wildlife Watching,Wrangell - St Elias National Park & Preserve",
+      "LastUpdatedDate": "2026-02-25",
+      "OrgRecAreaID": "WRST",
+      "ParentOrgID": "128",
+      "RecAreaAccessibilityText": "",
+      "RecAreaDescription": "Wrangell-St. Elias is a vast national park that rises from the ocean all the way up to 18,008 ft. At 13.2 million acres, the park is the same size as Yellowstone National Park, Yosemite National Park, and Switzerland combined! Within this wild landscape, people continue to live off the land as they have done for centuries. This rugged, beautiful land is filled with opportunities for adventure.",
+      "RecAreaDirections": "The administrative building and main park visitor center are located along the Richardson Highway (Hwy 4), which is a paved state highway that runs through Copper Center, AK. The buildings are 8 miles south of the Glenn Highway and Richardson Highway intersection near Glennallen, Alaska.  This is approximately 200 miles east of Anchorage, AK and 250 miles south of Fairbanks, AK.",
+      "RecAreaEmail": "wrst_info@nps.gov",
+      "RecAreaFeeDescription": "",
+      "RecAreaID": "2986",
+      "RecAreaLatitude": 61.418215,
+      "RecAreaLongitude": -142.602844,
+      "RecAreaMapURL": "",
+      "RecAreaName": "Wrangell - St Elias National Park & Preserve",
+      "RecAreaPhone": "(907) 822-5234",
+      "RecAreaReservationURL": "",
+      "Reservable": false,
+      "StayLimit": ""
+    },
+    {
+      "Enabled": true,
+      "GEOJSON": {
+        "COORDINATES": [
+          -119.557187,
+          37.848833
+        ],
+        "TYPE": "Point"
+      },
+      "Keywords": "Arts and Culture,Auto and ATV,Biking,Boating,Camping,Climbing,Fishing,Hiking,Horseback Riding,Living History,Paddling,Snow Tubing,Swimming,Wildlife Watching,Yosemite National Park",
+      "LastUpdatedDate": "2026-03-27",
+      "OrgRecAreaID": "YOSE",
+      "ParentOrgID": "128",
+      "RecAreaAccessibilityText": "",
+      "RecAreaDescription": "Not just a great valley, but a shrine to human foresight, the strength of granite, the power of glaciers, the persistence of life, and the tranquility of the High Sierra.\n\nFirst protected in 1864, Yosemite National Park is best known for its waterfalls, but within its nearly 1,200 square miles, you can find deep valleys, grand meadows, ancient giant sequoias, a vast wilderness area, and much more.",
+      "RecAreaDirections": "You can drive to Yosemite year-round and enter via Highways 41, 140, and 120 from the west. Tioga Pass Entrance (via Highway 120 from the east) is closed from approximately November through late May or June. Hetch Hetchy is open all year but may close intermittently due to snow.\n\nPlease note that GPS units do not always provide accurate directions to or within Yosemite.",
+      "RecAreaEmail": "yose_web_manager@nps.gov",
+      "RecAreaFeeDescription": "",
+      "RecAreaID": "2991",
+      "RecAreaLatitude": 37.848833,
+      "RecAreaLongitude": -119.557187,
+      "RecAreaMapURL": "",
+      "RecAreaName": "Yosemite National Park",
+      "RecAreaPhone": "209/372-0200",
+      "RecAreaReservationURL": "",
+      "Reservable": false,
+      "StayLimit": ""
+    },
+    {
+      "Enabled": true,
+      "GEOJSON": {
+        "COORDINATES": [
+          -119.88333,
+          37.11
+        ],
+        "TYPE": "Point"
+      },
+      "Keywords": "",
+      "LastUpdatedDate": "2026-02-25",
+      "OrgRecAreaID": "481",
+      "ParentOrgID": "130",
+      "RecAreaAccessibilityText": "",
+      "RecAreaDescription": "Less than an hour drive northeast of Fresno in the foothills of the Sierra Nevada enroute to Yosemite National Park. Lake activities include water skiing, fishing, swimming, horseback riding, mountain biking, hiking, and camping.",
+      "RecAreaDirections": "Located 17 miles northeast of Madera on County Road 400.",
+      "RecAreaEmail": "",
+      "RecAreaFeeDescription": "",
+      "RecAreaID": "481",
+      "RecAreaLatitude": 37.11,
+      "RecAreaLongitude": -119.88333,
+      "RecAreaMapURL": "",
+      "RecAreaName": "Hensley Lake",
+      "RecAreaPhone": "(559) 673-5151",
+      "RecAreaReservationURL": "",
+      "Reservable": false,
+      "StayLimit": ""
+    },
+    {
+      "Enabled": true,
+      "GEOJSON": {
+        "COORDINATES": null,
+        "TYPE": ""
+      },
+      "Keywords": "",
+      "LastUpdatedDate": "2026-02-25",
+      "OrgRecAreaID": "",
+      "ParentOrgID": "133",
+      "RecAreaAccessibilityText": "",
+      "RecAreaDescription": "Flanked by the Ansel Adams and Hoover Wilderness Areas and Yosemite National Park, Lee Vining Canyon Scenic Byway takes you through glacier and volcano-created scenery; a dichotomous conflict between two primal elements.",
+      "RecAreaDirections": "<p><strong>Navigating the Byway:</strong><br/><h4>Driving the Byway</h4>\n\n<p>Follow Highway 120 west through the Inyo National Forest from the town of Lee Vining to the Yosemite Entrance Station at Tioga Pass.</p>\n\n<h4>From Lee Vining, CA:</h4>\n\n<p>Head south on Interstate 395, and turn right onto Highway 120. The byway begins there.  </p>\n\n<h4>From Yosemite National Park:</h4>\n\n<p>Take Tioga Road Scenic Byway (Highway 120) and head north. Lee Vining Canyon Scenic Byway begins right after the National Park entrance at Tioga Pass. </p>\n\n</p>",
+      "RecAreaEmail": "",
+      "RecAreaFeeDescription": "",
+      "RecAreaID": "13732",
+      "RecAreaLatitude": 0,
+      "RecAreaLongitude": 0,
+      "RecAreaMapURL": "http://library.byways.org/a/static_maps/000/000/453/LeeVining_map.gif",
+      "RecAreaName": "Lee Vining Canyon Scenic Byway",
+      "RecAreaPhone": "800-400-4867",
+      "RecAreaReservationURL": "",
+      "Reservable": false,
+      "StayLimit": ""
+    }
+  ]
+}
