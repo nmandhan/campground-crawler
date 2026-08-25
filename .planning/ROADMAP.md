@@ -1,75 +1,26 @@
 # Roadmap: Campground Crawler
 
-## Overview
+## Milestones
 
-Campground Crawler ships in two coherent phases. Phase 1 builds and proves the core polling/matching engine entirely offline — config-driven watches, the RIDB + live-availability adapter, a pure matcher, typed success/no-match/check-failed outcomes, and durable dedup state — all testable via CLI against fixtures with no live deployment required. Phase 2 wires that proven engine into the real world: it sends actual emails via Resend, deploys the poller to run unattended on a schedule (GitHub Actions), and locks down credentials as secrets. By the end of Phase 2 the full loop is live: watch config in, Recreation.gov polled every few minutes, and an email lands in the user's inbox the moment a matching site opens — without duplicate spam and without the user touching anything.
+- ✅ **v1.0 MVP** — Phases 1-3 (shipped 2026-08-25)
 
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+<details>
+<summary>✅ v1.0 MVP (Phases 1-3) — SHIPPED 2026-08-25</summary>
 
-Decimal phases appear between their surrounding integers in numeric order.
+- [x] Phase 1: Core Polling Engine (4/4 plans) — completed 2026-08-22
+- [x] Phase 2: Notification Delivery & Deployment (3/4 plans) — completed 2026-08-25 (02-04 blocked on Resend domain verification, see MILESTONES.md Known Gaps)
+- [x] Phase 3: Status Dashboard (5/5 plans) — completed 2026-08-25
 
-- [x] **Phase 1: Core Polling Engine** - Config-driven watches, live Recreation.gov matching, and durable dedup state, fully testable offline via CLI + fixtures
-- [ ] **Phase 2: Notification Delivery & Deployment** - Real email alerts and unattended scheduled deployment with secured credentials
-- [ ] **Phase 3: Status Dashboard** - Vercel-hosted page showing recent poll results and watch state, as a near-term substitute for email alerts until a domain is verified with Resend
+Full details archived: `.planning/milestones/v1.0-ROADMAP.md`
 
-## Phase Details
-
-### Phase 1: Core Polling Engine
-**Goal**: Given a watch config, the system correctly determines which watches have new matching availability on Recreation.gov, distinguishes failures from genuine non-matches, and persists dedup state durably — verifiable end-to-end via CLI with fixture/live data, no deployment required.
-**Depends on**: Nothing (first phase)
-**Requirements**: WATCH-01, WATCH-02, POLL-01, POLL-02, POLL-03, POLL-04, OPS-01
-**Success Criteria** (what must be TRUE):
-  1. Running the poller against a real watch config (park/campground, date range, site type) returns matching sites from Recreation.gov's live availability endpoint, using the RIDB API to resolve the campground/facility ID first.
-  2. Two or more concurrent watches in the config produce independent match results — one watch's dedup/alert state never suppresses another watch's legitimate match.
-  3. The poller can execute on a recurring interval unattended (e.g. a local scheduler loop or repeated invocation) without manual triggering, checking all configured watches each cycle.
-  4. When Recreation.gov's API errors or rate-limits a request, the poller retries with backoff and records the cycle as "check failed" rather than crashing or silently reporting no availability.
-  5. Dedup/notification state is written to durable storage (e.g. a JSON file) after each run and correctly reloaded on the next run, so a restart doesn't lose track of what's already been seen.
-**Plans**: 4 plans (3 waves)
-- [x] 01-01-PLAN.md — Project scaffold + shared contracts (types, errors, zod schemas, StateStore interface)
-- [x] 01-02-PLAN.md — Recreation.gov adapter: RIDB resolution, availability fetch, retry/backoff, normalization
-- [x] 01-03-PLAN.md — Contiguous-range matcher + durable file-backed dedup state store
-- [x] 01-04-PLAN.md — Config loader, run() orchestrator, CLI (one-shot + --loop), end-to-end verification
-
-### Phase 2: Notification Delivery & Deployment
-**Goal**: The proven polling engine runs unattended in production and emails the user, with credentials handled securely, whenever a watch finds a genuinely new opening.
-**Depends on**: Phase 1
-**Requirements**: NOTF-01, NOTF-02, NOTF-03, OPS-02, OPS-03
-**Success Criteria** (what must be TRUE):
-  1. When a watch finds a newly available matching site, the user receives an email within one poll cycle of the site becoming available.
-  2. The email includes the campground/park name, specific site number, date(s), and a direct Recreation.gov booking link for that site.
-  3. If the same site remains open across multiple poll cycles, the user receives only one notification for that new-availability transition — no repeat/spam alerts.
-  4. The system runs on a hosted schedule (e.g. GitHub Actions cron) without the user manually invoking it, and keeps polling across scheduled runs indefinitely.
-  5. API keys and email service credentials are stored as encrypted secrets in the deployment platform, never committed to the repo.
-**Plans**: 4 plans (3 waves)
-- [x] 02-01-PLAN.md — Notification module: resend dependency, digest subject/body formatters, injectable sendDigestEmail
-- [x] 02-02-PLAN.md — Wire RunDeps.sendNotification into run(), one digest per cycle over post-dedup newMatches
-- [x] 02-03-PLAN.md — Scheduled GitHub Actions workflow, un-ignored + seeded state.json commit-back, env/secrets docs
-- [ ] 02-04-PLAN.md — Secret audit, Resend/GitHub secret provisioning, live smoke test (checkpoints) — **paused at Task 3**: real email delivery blocked on Resend domain verification (no `onboarding@resend.dev` shared-domain access on this account); repo is public, secrets are provisioned, match/dedup/commit-back all verified live
-
-### Phase 3: Status Dashboard
-**Goal**: A hosted status page shows recent poll results and watch state, giving visibility into the poller without requiring email — a near-term substitute until a domain is verified with Resend for real alert delivery.
-**Depends on**: Phase 2
-**Requirements**: No formal REQ-IDs — scope is this goal plus 03-CONTEXT.md decisions D-01..D-08
-**Plans:** 5 plans (4 waves)
-
-Plans:
-- [x] 03-01-PLAN.md — Run-summary file writer, cli.ts wiring, workflow append-and-cap of a 50-entry runs.json (D-01, D-02)
-- [x] 03-02-PLAN.md — dashboard/ Next.js scaffold, local types, GitHub raw fetch helper, zod validation (D-03, D-08)
-- [x] 03-03-PLAN.md — Pure derivations: active matches, per-watch status, run timeline, time/date formatting (D-05, D-06, D-07)
-- [x] 03-04-PLAN.md — UI-SPEC design tokens, copy constants, view-model assembly, App Router page rendering the three sections (D-04..D-08)
-- [x] 03-05-PLAN.md — Vercel deploy (Root Directory = dashboard), live verification, README URL record (D-03, D-04, D-08)
+</details>
 
 ## Progress
 
-**Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Core Polling Engine | 4/4 | Complete | 2026-08-22 |
-| 2. Notification Delivery & Deployment | 3/4 | Paused (checkpoint) | - |
-| 3. Status Dashboard | 0/5 | Planned | - |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|-----------------|--------|-----------|
+| 1. Core Polling Engine | v1.0 | 4/4 | Complete | 2026-08-22 |
+| 2. Notification Delivery & Deployment | v1.0 | 3/4 | Complete (known gap) | 2026-08-25 |
+| 3. Status Dashboard | v1.0 | 5/5 | Complete | 2026-08-25 |
