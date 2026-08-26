@@ -173,3 +173,67 @@ export function parseRunLog(raw: unknown): ParseResult<RunLogEntry[]> & { skippe
   }
   return { ok: true, data, skipped };
 }
+
+/** Write-path validation (MGMT-02/03). Hand-duplicated from the poller's
+ *  `src/config/schema.ts` — NOT imported (dashboard/lib/types.ts header: never import
+ *  across the src/ <-> dashboard/ boundary). The loose schemas above stay loose on
+ *  purpose: the read path must display whatever is committed. This one must produce
+ *  data the poller's own WatchesFileSchema would accept, or the next poll run fails
+ *  its top-level parse and every watch stops (RESEARCH.md Pitfall 3). */
+const StrictDateRangeSchema = z
+  .object({
+    start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD'),
+    end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD'),
+  })
+  .refine((r) => r.start < r.end, {
+    message: 'dateRange.start must be before dateRange.end (end is the exclusive checkout date)',
+  });
+
+export const StrictFacilityWatchSchema = z.object({
+  type: z.literal('facility'),
+  id: z.string().min(1),
+  parkName: z.string().min(1),
+  facilityId: z.number().int().positive().optional(),
+  dateRange: StrictDateRangeSchema,
+  siteType: SiteTypeSchema,
+});
+
+export const StrictAreaWatchSchema = z.object({
+  type: z.literal('area'),
+  id: z.string().min(1),
+  areas: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        recAreaId: z.number().int().positive().optional(),
+      })
+    )
+    .min(1, 'an area watch must list at least one area'),
+  dateRange: StrictDateRangeSchema,
+  siteType: SiteTypeSchema,
+});
+
+/** No `preprocess` legacy-migration wrapper here, unlike the loose WatchSchema above:
+ *  the write UI always sends an explicit `type`, so an untyped payload is a bug, not
+ *  a v1.0 leftover to be tolerated. */
+export const StrictWatchSchema = z.discriminatedUnion('type', [
+  StrictFacilityWatchSchema,
+  StrictAreaWatchSchema,
+]);
+
+const _assertStrictWatch: Watch = {} as z.infer<typeof StrictWatchSchema>;
+void _assertStrictWatch;
+
+export function parseStrictWatch(raw: unknown): ParseResult<Watch> {
+  const result = StrictWatchSchema.safeParse(raw);
+  if (!result.success) return { ok: false, error: formatIssues(result.error) };
+  return { ok: true, data: result.data };
+}
+
+/** Uniqueness can't be a zod refine here: the write path validates ONE watch object,
+ *  not the whole array. The Route Handler checks the candidate against the freshly
+ *  fetched watches[] instead (mirrors WatchesFileSchema's unique-id refine in
+ *  src/config/schema.ts). `ignoreId` lets an edit keep its own id. */
+export function assertUniqueId(watches: Watch[], candidateId: string, ignoreId?: string): boolean {
+  return !watches.some((w) => w.id === candidateId && w.id !== ignoreId);
+}
