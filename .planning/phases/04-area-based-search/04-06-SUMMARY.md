@@ -42,27 +42,24 @@ key-decisions:
 requirements-completed: [AREA-01, AREA-02, AREA-05]
 
 # Metrics
-duration: 55min
+duration: 75min
 completed: 2026-08-26
 ---
 
-# Phase 4 Plan 6: run() Group-Then-Aggregate Restructure Summary (Tasks 1-2 complete; Task 3 checkpoint pending)
+# Phase 4 Plan 6: run() Group-Then-Aggregate Restructure Summary
 
-**Restructured `run()`'s flat 1:1 watch loop into group-then-aggregate by watch id, carrying `facilityType` from the matcher into the email digest's `[GROUP]` tag, so an N-facility area watch collapses into exactly one `WatchOutcome` with per-facility failure isolation and truncation attribution.**
+**Restructured `run()`'s flat 1:1 watch loop into group-then-aggregate by watch id, carrying `facilityType` from the matcher into the email digest's `[GROUP]` tag, so an N-facility area watch collapses into exactly one `WatchOutcome` with per-facility failure isolation and truncation attribution — live-verified end to end against a real 2-area, 70-campground Recreation.gov region.**
 
 ## Status
 
-Tasks 1 and 2 (both `type="auto"`) are complete, committed, and verified. Task 3 is a
-`checkpoint:human-verify` gate (`gate="blocking"`) requiring a live `RIDB_API_KEY` and real
-Recreation.gov traffic against a real multi-campground Recreation Area — this cannot be
-exercised by Claude. Execution is paused at this checkpoint per the plan's execution protocol;
-see the checkpoint message returned alongside this summary for the exact verification steps
-handed to the developer.
+All 3 tasks complete. Tasks 1 and 2 (`type="auto"`) were implemented, tested, and committed.
+Task 3 (`checkpoint:human-verify`, `gate="blocking"`) was live-verified by the developer against
+real RIDB/Recreation.gov traffic — see Live Verification Evidence below.
 
 ## Performance
 
-- **Duration:** 55 min (Tasks 1-2 only; Task 3 duration TBD pending developer verification)
-- **Tasks:** 2 of 3 complete (Task 3 blocked on live human verification)
+- **Duration:** 75 min (Tasks 1-2 implementation + Task 3 live verification)
+- **Tasks:** 3 of 3 complete
 - **Files modified:** 7
 
 ## Accomplishments
@@ -79,8 +76,7 @@ handed to the developer.
 
 1. **Task 1: Carry facilityType through the matcher and into the email digest** - `c746c68` (feat)
 2. **Task 2: Restructure run() to group-then-aggregate by watch id** - `9a98a5f` (feat)
-
-Task 3 (checkpoint:human-verify, blocking) is pending developer action — not yet executed.
+3. **Task 3: Verify an area watch end to end against live Recreation.gov** - checkpoint, no code changes; verified live by the developer (see Live Verification Evidence)
 
 ## Files Created/Modified
 
@@ -122,28 +118,66 @@ Task 3 (checkpoint:human-verify, blocking) is pending developer action — not y
 - `git diff --stat src/state/store.ts`: no changes (dedup store untouched, as required)
 - Acceptance-criteria greps for both tasks (see plan `04-06-PLAN.md` Task 1/Task 2 `<acceptance_criteria>`) all pass
 
+## Live Verification Evidence (Task 3)
+
+Verified by the developer (authorized run against a temporary `tmp-area-check` area watch,
+`watches.json` and `state.json` both restored afterward — no test artifacts committed):
+
+- **First attempt (bare area names, no `recAreaId` override):** both "Sequoia National Forest"
+  and "Sierra National Forest" RIDB text-search top-matched the wrong RecArea ("Kiavah
+  Wilderness", id 14780 — a wilderness area with no reservable campgrounds). This is a known
+  RIDB fuzzy-match quirk (the same class of mismatch seen during 04-01's fixture capture, where
+  "Yosemite National Park" top-matched "Wrangell - St Elias"). The system produced exactly one
+  clean outcome line — `FAILED tmp-area-check — no reservable campgrounds found across 2 area(s)`
+  — not a crash, not a silent wrong match, confirming resolveWatches()'s per-watch failure
+  isolation extends correctly to this failure mode.
+- **Second attempt, using the `recAreaId` override escape hatch (D-02)** with the correct IDs
+  (1072, 1074, confirmed via direct RIDB API query):
+  - `resolved area "..." -> recArea <id> (<name>)` lines present per area
+  - a single `RIDB resolution calls this run: N` line present
+  - `watch "tmp-area-check" resolved 70 campgrounds — showing 20 of 70 (capped at AREA_FACILITY_CAP=20)`
+    — the truncation warning surfaced correctly
+  - exactly ONE result line for `tmp-area-check` in the console log
+    (`OK tmp-area-check — 76 new, 0 already notified: ...`), not one per campground
+  - via `RUN_SUMMARY_FILE`, the structured run-summary equivalent of what CI appends to
+    `runs.json` contained exactly ONE outcome object with `"watchId": "tmp-area-check"`,
+    including `"truncated": {"requested": 70, "kept": 20}`
+  - all 5 unique resolved facility names are plausible campgrounds — **COY FLAT, FRENCH GULCH,
+    QUAKING ASPEN, WISHON, WISHON CABIN** — each tagged `"facilityType": "standard"`; no visitor
+    centers, boat ramps, or day-use areas (AREA-03 filter confirmed working at region scale)
+  - no `apikey` value anywhere in console output (grep-verified)
+  - `watches.json` restored to pre-test contents (`git diff watches.json` empty)
+  - `state.json` (dedup store), polluted by the test run's 76 matches, reverted
+    (`git checkout -- state.json`) so no test artifacts leak into dedup history
+
+All Task 3 acceptance criteria met: exactly one `tmp-area-check` outcome in both the log and the
+run summary, every resolved facility name plausibly a campground, no `apikey` leakage,
+`watches.json` restored.
+
 ## Issues Encountered
 
-None beyond the Rule 3 fixes documented above.
+None beyond the Rule 3 fixes documented above and the expected RIDB fuzzy-match miss on bare
+area names during Task 3's first live-verification pass (correctly handled by existing
+per-watch failure isolation, no code change required).
 
 ## User Setup Required
 
-Task 3's live verification requires a `RIDB_API_KEY` and a temporary edit to `watches.json` —
-see the checkpoint message for exact steps. No permanent setup required.
+None — Task 3's live verification (requiring a `RIDB_API_KEY` and a temporary `watches.json`
+edit) is complete; no further setup needed.
 
 ## Next Phase Readiness
 
-- Tasks 1-2 are code-complete, tested, and committed. Phase 4 cannot be marked complete until
-  Task 3's live end-to-end verification is confirmed by the developer (exactly one
-  `tmp-area-check` outcome in both the log and `runs.json`, plausible campground names, no
-  `apikey` leakage, `watches.json` restored).
-- Once Task 3 is approved, this SUMMARY should be updated with the live-verification evidence
-  (resolved campground names) per the plan's `<output>` spec, and the phase can be marked
-  complete.
+- All 3 tasks are complete, tested, committed, and live-verified. Phase 4's `run()` restructure
+  is production-ready.
+- The RIDB fuzzy-match quirk observed during live verification (bare area names occasionally
+  top-matching the wrong RecArea) is not a Phase 4 bug — it's the documented behavior D-02's
+  `recAreaId` override exists to correct, and it was exercised successfully in this same
+  verification pass. No follow-up action needed.
+- No blockers identified for Phase 4 completion.
 
 ---
 *Phase: 04-area-based-search*
-*Status: Tasks 1-2 complete; Task 3 (blocking checkpoint) awaiting developer verification*
+*Status: Complete — all 3 tasks done, live-verified against real Recreation.gov traffic*
 
 ## Self-Check: PASSED
 
