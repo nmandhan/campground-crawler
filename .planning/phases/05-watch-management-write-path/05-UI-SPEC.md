@@ -95,7 +95,7 @@ No new colors are introduced anywhere in this phase.
 |---------|------|
 | Primary CTA (open create modal) | `+ Add Watch` |
 | Primary CTA (inside modal, submit) | `Save Watch` |
-| Secondary CTA (inside modal) | `Cancel` |
+| Secondary CTA (inside modal) | `Discard Changes` |
 | Facility/Area toggle labels | `Single Campground` / `Recreation Area(s)` |
 | Typeahead placeholder (area search) | `Search Recreation Areas by name…` |
 | Typeahead empty/no-results | `No Recreation Areas found for "{query}"` |
@@ -109,12 +109,12 @@ No new colors are introduced anywhere in this phase.
 | Unlock prompt heading | `Unlock to manage watches` |
 | Unlock prompt body | `Enter the shared passphrase to create, edit, or delete watches. Read-only viewing never requires this.` |
 | Unlock prompt input placeholder | `Passphrase` |
-| Unlock prompt submit | `Unlock` |
+| Unlock prompt submit | `Unlock Watches` |
 | Unlock prompt error (wrong passphrase) | `That passphrase didn't match. Try again.` |
 | Empty state (no watches) — unchanged from Phase 3 | `No watches configured` / `watches.json has no entries yet. Add a watch and the poller will pick it up on its next cycle.` |
 | Error state (save failed) | `Couldn't save this watch. {reason if known, e.g. a network/GitHub error} — nothing was changed. Try again.` |
 | Error state (RIDB search failed) | `Couldn't search Recreation Areas right now. Try again in a moment.` |
-| Destructive confirmation | Delete watch: `Delete this watch? This can't be undone.` — confirm button reads `Delete`, cancel button reads `Cancel` (D-11, verbatim) |
+| Destructive confirmation | Delete watch: `Delete this watch? This can't be undone.` — confirm button reads `Delete`, cancel button reads `Keep Watch` (D-11, verbatim) |
 | Post-save toast (D-12, verbatim) | `Saved — live within ~5 min` |
 | Post-delete toast | `Deleted — live within ~5 min` (mirrors D-12's phrasing for consistency, since delete has the same cron-propagation delay) |
 
@@ -139,8 +139,10 @@ These capture UI states the checker/executor need that aren't pure tokens/copy:
 - **Chips (D-06):** rendered as a wrapped row of pill-shaped elements (`--space-xs` internal padding, `--color-surface` background, `1px solid --color-border`), each with a trailing `×` remove control sized to the 44px touch-target exception above.
 - **Typeahead (D-07):** debounced ~300ms, dropdown appears below the input, keyboard-navigable (arrow keys + Enter), closes on selection or blur.
 - **Preview (D-09/D-10):** re-fetches automatically on every chip add/remove; shows a brief loading state (see copy above) rather than a spinner icon (no icon library); full list, not a count, each row tagged per the color/copy contract above.
-- **Delete confirm (D-11):** a second, smaller native `<dialog>` (not the edit modal) — confirm button uses the Destructive color, cancel uses a neutral/secondary style (no accent).
+- **Delete confirm (D-11):** a second, smaller native `<dialog>` (not the edit modal) — confirm button reads `Delete` and uses the Destructive color; cancel button reads `Keep Watch` and uses a neutral/secondary style (no accent).
 - **Toast (D-12):** fixed-position banner, `--color-surface` background, `--color-text` text, auto-dismisses after ~4s or on manual dismiss; does not block interaction with the page underneath (not a modal).
+- **Focal point (watch-list screen):** when unlocked, the `+ Add Watch` CTA is the primary visual anchor (top-right of the watch-management section, accent color, per Color contract above); when locked/read-only, the watch list itself is the anchor and the unlock prompt (D-02) is secondary.
+- **Icon-button aria-labels (per watch row):** mirrors the chip-remove `aria-label="Remove {area name}"` pattern — edit button uses `aria-label="Edit watch: {watch name}"`, delete button uses `aria-label="Delete watch: {watch name}"`.
 
 ---
 
