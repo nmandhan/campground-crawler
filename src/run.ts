@@ -12,7 +12,14 @@ import { FileStateStore } from './state/fileStore.js';
 import { describeFailure } from './errors.js';
 import { nightsInRange } from './matcher/dates.js';
 import { sendDigestEmail } from './notify/email.js';
-import type { RunSummary, WatchOutcome, MatchedSlot } from './types.js';
+import type {
+  RunSummary,
+  WatchOutcome,
+  MatchedSlot,
+  ResolvedWatch,
+  FacilityFailure,
+  TruncationInfo,
+} from './types.js';
 
 export interface RunLogger {
   info(msg: string): void;
@@ -47,43 +54,94 @@ export async function run(deps?: RunDeps): Promise<RunSummary> {
 
   const startedAt = now().toISOString();
 
-  const { resolved, failures } = await loadResolved();
+  const { resolved, failures, truncations } = await loadResolved();
 
   await store.load();
 
-  const outcomes: WatchOutcome[] = failures.map((f) => ({
-    watchId: f.watchId,
-    status: 'FAILED' as const,
-    reason: f.reason,
-  }));
+  const truncationByWatch = new Map<string, TruncationInfo>(
+    truncations.map((t) => [t.watchId, { requested: t.requested, kept: t.kept }])
+  );
 
-  for (const watch of resolved) {
-    try {
-      const responses = await fetchRange(watch.facilityId, watch.dateRange.start, watch.dateRange.end);
-      const slots = mergeSlots(...responses.map(parseAvailability));
-      const matches = matchWatch(slots, watch);
+  const outcomes: WatchOutcome[] = failures.map((f) => {
+    const truncated = truncationByWatch.get(f.watchId);
+    return {
+      watchId: f.watchId,
+      status: 'FAILED' as const,
+      reason: f.reason,
+      ...(truncated ? { truncated } : {}),
+    };
+  });
 
-      if (matches.length === 0) {
-        outcomes.push({ watchId: watch.id, status: 'NO_MATCH' });
-        continue;
+  // ARCHITECTURE.md Anti-Pattern 2: an AreaWatch contributes N ResolvedWatch entries
+  // sharing one id, but every runs.json consumer does outcomes.find(o => o.watchId === id).
+  // Collapse to exactly ONE outcome per watch id before anything downstream sees it.
+  const groups = new Map<string, ResolvedWatch[]>();
+  for (const w of resolved) {
+    const arr = groups.get(w.id) ?? [];
+    arr.push(w);
+    groups.set(w.id, arr);
+  }
+
+  for (const [watchId, facilities] of groups) {
+    const allMatches: MatchedSlot[] = [];
+    const facilityFailures: FacilityFailure[] = [];
+
+    for (const facility of facilities) {
+      try {
+        const responses = await fetchRange(facility.facilityId, facility.dateRange.start, facility.dateRange.end);
+        const slots = mergeSlots(...responses.map(parseAvailability));
+        allMatches.push(...matchWatch(slots, facility));
+      } catch (err) {
+        // RESEARCH.md Open Question 3 — RESOLVED: degrade gracefully. One flaky campground
+        // must never hide matches found on its 14 healthy siblings. This extends
+        // resolveWatches()'s "a failure never aborts the run for the others" convention
+        // one level deeper, from per-watch to per-facility.
+        facilityFailures.push({
+          facilityId: facility.facilityId,
+          facilityName: facility.facilityName,
+          reason: describeFailure(err),
+        });
       }
-
-      const newMatches: MatchedSlot[] = [];
-      const suppressed: MatchedSlot[] = [];
-      for (const match of matches) {
-        const key = dedupKey(match.watchId, match.campsiteId, match.startDate, match.endDate);
-        if (store.has(key)) {
-          suppressed.push(match);
-        } else {
-          store.markNotified(key, now());
-          newMatches.push(match);
-        }
-      }
-
-      outcomes.push({ watchId: watch.id, status: 'MATCH', newMatches, suppressed });
-    } catch (err) {
-      outcomes.push({ watchId: watch.id, status: 'FAILED', reason: describeFailure(err) });
     }
+
+    const extra: { truncated?: TruncationInfo; facilityFailures?: FacilityFailure[] } = {};
+    const truncated = truncationByWatch.get(watchId);
+    if (truncated) extra.truncated = truncated;
+    if (facilityFailures.length > 0) extra.facilityFailures = facilityFailures;
+
+    // Every facility failed => the watch genuinely failed. Some failed => still report
+    // what was found, with the failures attached.
+    if (facilityFailures.length === facilities.length) {
+      outcomes.push({
+        watchId,
+        status: 'FAILED',
+        reason:
+          facilities.length === 1
+            ? (facilityFailures[0]?.reason ?? 'unknown failure')
+            : `all ${facilities.length} campgrounds failed; first: ${facilityFailures[0]?.reason ?? 'unknown failure'}`,
+        ...extra,
+      });
+      continue;
+    }
+
+    if (allMatches.length === 0) {
+      outcomes.push({ watchId, status: 'NO_MATCH', ...extra });
+      continue;
+    }
+
+    const newMatches: MatchedSlot[] = [];
+    const suppressed: MatchedSlot[] = [];
+    for (const match of allMatches) {
+      const key = dedupKey(match.watchId, match.campsiteId, match.startDate, match.endDate);
+      if (store.has(key)) {
+        suppressed.push(match);
+      } else {
+        store.markNotified(key, now());
+        newMatches.push(match);
+      }
+    }
+
+    outcomes.push({ watchId, status: 'MATCH', newMatches, suppressed, ...extra });
   }
 
   await store.save();
@@ -95,7 +153,7 @@ export async function run(deps?: RunDeps): Promise<RunSummary> {
         `OK    ${outcome.watchId} — ${outcome.newMatches.length} new, ${outcome.suppressed.length} already notified: ${sites}`
       );
     } else if (outcome.status === 'NO_MATCH') {
-      const watch = resolved.find((w) => w.id === outcome.watchId);
+      const watch = groups.get(outcome.watchId)?.[0];
       const nightCount = watch ? nightsInRange(watch.dateRange.start, watch.dateRange.end).length : 0;
       logger.info(`NO MATCH ${outcome.watchId} — checked ${nightCount} nights, nothing available`);
     } else {
@@ -127,7 +185,9 @@ export async function run(deps?: RunDeps): Promise<RunSummary> {
   return {
     startedAt,
     finishedAt,
-    checked: resolved.length + failures.length,
+    // Counts WATCHES attempted, not facilities polled: a 20-campground area watch is 1.
+    // Dashboard consumers have always read `checked` as "watches attempted".
+    checked: groups.size + failures.length,
     outcomes,
     newMatches,
     failed,

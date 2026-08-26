@@ -71,9 +71,9 @@ class MemoryStateStore implements StateStore {
 function watch(id: string, parkName = 'Test Park'): ResolvedWatch {
   return {
     id,
-    parkName,
     facilityId: 1,
     facilityName: parkName,
+    facilityType: 'standard',
     dateRange: { start: '2026-09-04', end: '2026-09-07' },
     siteType: 'any',
   };
@@ -113,8 +113,12 @@ function noAvailabilityResponse(): RawAvailabilityResponse {
   };
 }
 
-function loadResolvedOf(resolved: ResolveResult['resolved'], failures: ResolveResult['failures'] = []) {
-  return async (): Promise<ResolveResult> => ({ resolved, failures });
+function loadResolvedOf(
+  resolved: ResolveResult['resolved'],
+  failures: ResolveResult['failures'] = [],
+  truncations: ResolveResult['truncations'] = []
+) {
+  return async (): Promise<ResolveResult> => ({ resolved, failures, truncations });
 }
 
 test('two watches, both fully available: checked=2, newMatches.length=2, two MATCH outcomes', async () => {
@@ -478,4 +482,275 @@ test('digest is sent for a new match and suppressed on the next cycle (NOTF-01/N
     assert.equal(buildSubject(notifier.calls[0]!), '1 new campsite available: Test Park');
     assert.ok(buildBody(notifier.calls[0]!).includes('https://www.recreation.gov/camping/campsites/12345'));
   });
+});
+
+function areaFacility(id: string, facilityId: number, facilityName: string): ResolvedWatch {
+  return {
+    id,
+    facilityId,
+    facilityName,
+    facilityType: 'standard',
+    dateRange: { start: '2026-09-04', end: '2026-09-07' },
+    siteType: 'any',
+  };
+}
+
+test('three ResolvedWatch entries sharing id "sierra" produce exactly ONE outcome', async () => {
+  const store = new MemoryStateStore();
+  const sierra = [
+    areaFacility('sierra', 1, 'Facility A'),
+    areaFacility('sierra', 2, 'Facility B'),
+    areaFacility('sierra', 3, 'Facility C'),
+  ];
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf(sierra),
+    fetchRange: async () => [noAvailabilityResponse()],
+    store,
+    logger: recordingLogger().logger,
+  };
+  const summary = await run(deps);
+  assert.equal(summary.outcomes.filter((o) => o.watchId === 'sierra').length, 1);
+});
+
+test('matches across a group\'s facilities aggregate into the single outcome, each retaining its own facility attribution', async () => {
+  const store = new MemoryStateStore();
+  const sierra = [
+    areaFacility('sierra', 11, 'Facility A'),
+    areaFacility('sierra', 22, 'Facility B'),
+  ];
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf(sierra),
+    fetchRange: async (facilityId) => [fullyAvailableResponse(`site-${facilityId}`, '001')],
+    store,
+    logger: recordingLogger().logger,
+  };
+  const summary = await run(deps);
+  const outcome = summary.outcomes.find((o) => o.watchId === 'sierra')!;
+  assert.equal(outcome.status, 'MATCH');
+  if (outcome.status === 'MATCH') {
+    assert.equal(outcome.newMatches.length, 2);
+    const facilityIds = outcome.newMatches.map((m) => m.facilityId).sort();
+    assert.deepEqual(facilityIds, [11, 22]);
+    const facilityNames = new Set(outcome.newMatches.map((m) => m.facilityName));
+    assert.deepEqual([...facilityNames].sort(), ['Facility A', 'Facility B']);
+  }
+});
+
+test('group members are polled in resolved order', async () => {
+  const store = new MemoryStateStore();
+  const calledOrder: number[] = [];
+  const sierra = [
+    areaFacility('sierra', 3, 'Facility C'),
+    areaFacility('sierra', 1, 'Facility A'),
+    areaFacility('sierra', 2, 'Facility B'),
+  ];
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf(sierra),
+    fetchRange: async (facilityId) => {
+      calledOrder.push(facilityId);
+      return [noAvailabilityResponse()];
+    },
+    store,
+    logger: recordingLogger().logger,
+  };
+  await run(deps);
+  assert.deepEqual(calledOrder, [3, 1, 2]);
+});
+
+test('a group where facility 2 of 3 rejects still yields MATCH from the others, plus facilityFailures', async () => {
+  const store = new MemoryStateStore();
+  const sierra = [
+    areaFacility('sierra', 1, 'Facility A'),
+    areaFacility('sierra', 2, 'Facility B'),
+    areaFacility('sierra', 3, 'Facility C'),
+  ];
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf(sierra),
+    fetchRange: async (facilityId) => {
+      if (facilityId === 2) throw new Error('boom for facility B');
+      return [fullyAvailableResponse(`site-${facilityId}`, '001')];
+    },
+    store,
+    logger: recordingLogger().logger,
+  };
+  const summary = await run(deps);
+  const outcome = summary.outcomes.find((o) => o.watchId === 'sierra')!;
+  assert.equal(outcome.status, 'MATCH');
+  if (outcome.status === 'MATCH') {
+    assert.deepEqual(outcome.facilityFailures, [
+      { facilityId: 2, facilityName: 'Facility B', reason: outcome.facilityFailures![0]!.reason },
+    ]);
+    assert.ok(outcome.facilityFailures![0]!.reason.length > 0);
+  }
+});
+
+test('a group where facility 2 of 3 rejects and the others match nothing yields NO_MATCH with the same facilityFailures', async () => {
+  const store = new MemoryStateStore();
+  const sierra = [
+    areaFacility('sierra', 1, 'Facility A'),
+    areaFacility('sierra', 2, 'Facility B'),
+    areaFacility('sierra', 3, 'Facility C'),
+  ];
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf(sierra),
+    fetchRange: async (facilityId) => {
+      if (facilityId === 2) throw new Error('boom for facility B');
+      return [noAvailabilityResponse()];
+    },
+    store,
+    logger: recordingLogger().logger,
+  };
+  const summary = await run(deps);
+  const outcome = summary.outcomes.find((o) => o.watchId === 'sierra')!;
+  assert.equal(outcome.status, 'NO_MATCH');
+  if (outcome.status === 'NO_MATCH') {
+    assert.equal(outcome.facilityFailures?.length, 1);
+    assert.equal(outcome.facilityFailures?.[0]?.facilityId, 2);
+  }
+});
+
+test('a group where ALL facilities reject yields FAILED with a reason and a facilityFailures entry per facility', async () => {
+  const store = new MemoryStateStore();
+  const sierra = [
+    areaFacility('sierra', 1, 'Facility A'),
+    areaFacility('sierra', 2, 'Facility B'),
+  ];
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf(sierra),
+    fetchRange: async () => {
+      throw new Error('boom');
+    },
+    store,
+    logger: recordingLogger().logger,
+  };
+  const summary = await run(deps);
+  const outcome = summary.outcomes.find((o) => o.watchId === 'sierra')!;
+  assert.equal(outcome.status, 'FAILED');
+  if (outcome.status === 'FAILED') {
+    assert.ok(outcome.reason.length > 0);
+    assert.equal(outcome.facilityFailures?.length, 2);
+  }
+});
+
+test('an outcome with zero facility failures has no facilityFailures key', async () => {
+  const store = new MemoryStateStore();
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf([watch('w1')]),
+    fetchRange: async () => [fullyAvailableResponse('site-1', '001')],
+    store,
+    logger: recordingLogger().logger,
+  };
+  const summary = await run(deps);
+  const outcome = summary.outcomes[0]!;
+  assert.equal('facilityFailures' in outcome, false);
+});
+
+test('loadResolved returning truncations puts truncated on the matching outcome regardless of status', async () => {
+  const store = new MemoryStateStore();
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf(
+      [areaFacility('sierra', 1, 'Facility A')],
+      [],
+      [{ watchId: 'sierra', requested: 36, kept: 20 }]
+    ),
+    fetchRange: async () => [noAvailabilityResponse()],
+    store,
+    logger: recordingLogger().logger,
+  };
+  const summary = await run(deps);
+  const outcome = summary.outcomes.find((o) => o.watchId === 'sierra')!;
+  assert.deepEqual(outcome.truncated, { requested: 36, kept: 20 });
+});
+
+test('a watch id present in truncations but absent from resolved still gets truncated on its FAILED outcome', async () => {
+  const store = new MemoryStateStore();
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf(
+      [],
+      [{ watchId: 'sierra', reason: 'all areas failed to resolve' }],
+      [{ watchId: 'sierra', requested: 36, kept: 20 }]
+    ),
+    fetchRange: async () => [noAvailabilityResponse()],
+    store,
+    logger: recordingLogger().logger,
+  };
+  const summary = await run(deps);
+  const outcome = summary.outcomes.find((o) => o.watchId === 'sierra')!;
+  assert.equal(outcome.status, 'FAILED');
+  assert.deepEqual(outcome.truncated, { requested: 36, kept: 20 });
+});
+
+test('a single-facility watch produces an outcome with no truncated and no facilityFailures keys', async () => {
+  const store = new MemoryStateStore();
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf([watch('w1')]),
+    fetchRange: async () => [fullyAvailableResponse('site-1', '001')],
+    store,
+    logger: recordingLogger().logger,
+  };
+  const summary = await run(deps);
+  const outcome = summary.outcomes[0]!;
+  assert.equal('truncated' in outcome, false);
+  assert.equal('facilityFailures' in outcome, false);
+});
+
+test('checked equals the number of distinct watches attempted, not the facility count', async () => {
+  const store = new MemoryStateStore();
+  const sierra = [
+    areaFacility('sierra', 1, 'Facility A'),
+    areaFacility('sierra', 2, 'Facility B'),
+    areaFacility('sierra', 3, 'Facility C'),
+  ];
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf(
+      [...sierra, watch('w1')],
+      [{ watchId: 'w2', reason: 'failed to resolve' }]
+    ),
+    fetchRange: async () => [noAvailabilityResponse()],
+    store,
+    logger: recordingLogger().logger,
+  };
+  const summary = await run(deps);
+  assert.equal(summary.checked, 3);
+});
+
+test('a suppressed match from facility A is not re-notified when facility B also reports it', async () => {
+  const store = new MemoryStateStore();
+  const key = dedupKey('sierra', 'shared-site', '2026-09-04', '2026-09-07');
+  store.markNotified(key);
+  store.markNotifiedCalls = [];
+  const sierra = [
+    areaFacility('sierra', 1, 'Facility A'),
+    areaFacility('sierra', 2, 'Facility B'),
+  ];
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf(sierra),
+    fetchRange: async () => [fullyAvailableResponse('shared-site', '001')],
+    store,
+    logger: recordingLogger().logger,
+  };
+  const summary = await run(deps);
+  const outcome = summary.outcomes.find((o) => o.watchId === 'sierra')!;
+  assert.equal(outcome.status, 'MATCH');
+  if (outcome.status === 'MATCH') {
+    assert.equal(outcome.newMatches.length, 0);
+    assert.equal(outcome.suppressed.length, 2);
+  }
+});
+
+test('the NO_MATCH log line still reports a night count for a group watch', async () => {
+  const store = new MemoryStateStore();
+  const { logger, lines } = recordingLogger();
+  const sierra = [
+    areaFacility('sierra', 1, 'Facility A'),
+    areaFacility('sierra', 2, 'Facility B'),
+  ];
+  const deps: RunDeps = {
+    loadResolved: loadResolvedOf(sierra),
+    fetchRange: async () => [noAvailabilityResponse()],
+    store,
+    logger,
+  };
+  await run(deps);
+  assert.ok(lines.some((l) => l.startsWith('NO MATCH') && l.includes('sierra') && /checked \d+ nights/.test(l)));
 });
