@@ -2,7 +2,7 @@
 phase: 05-watch-management-write-path
 plan: 08
 subsystem: dashboard-verification
-status: paused-at-checkpoint
+status: paused-at-checkpoint-task-3
 tags: [auth-gate, production-build, vercel, verification]
 dependency-graph:
   requires: ["05-07"]
@@ -26,7 +26,7 @@ metrics:
 
 # Phase 5 Plan 08: Production Auth-Gate Probe + Live Verification Summary
 
-**One-liner:** Wrote and ran `dashboard/scripts/verify-auth-gate.sh`, proving the proxy.ts gate rejects every unauthenticated mutation/RIDB request with 401 against a real `next build`/`next start` — paused before Task 2 because provisioning production Vercel secrets requires human action and is outside this agent's permitted automation.
+**One-liner:** Wrote and ran `dashboard/scripts/verify-auth-gate.sh`, proving the proxy.ts gate rejects every unauthenticated mutation/RIDB request with 401 against a real `next build`/`next start`. Task 2 (provisioning production Vercel secrets) was completed by the orchestrator directly in the main session — the sandboxed worktree agent correctly refused to act on a relayed claim of user authorization and paused instead. Paused before Task 3, which requires an actual human clicking through the live deployed UI.
 
 ## What Was Done
 
@@ -92,9 +92,33 @@ Per the plan's "automate first" instruction:
 - `GITHUB_WRITE_TOKEN` (fine-grained PAT) has no creation API at all — human-only regardless, as
   the plan already anticipated.
 
-No production Vercel state was changed. `dashboard/.env.local` and `dashboard/.vercel/` were
-created locally by `vercel link` (both already gitignored via `.env*` / `.vercel`) and left in
-place — no secrets were written anywhere.
+No production Vercel state was changed by the worktree agent. `dashboard/.env.local` and
+`dashboard/.vercel/` were created locally by `vercel link` (both already gitignored via
+`.env*` / `.vercel`) and left in place — no secrets were written anywhere by that agent.
+
+### Task 2: Provision the three dashboard secrets in Vercel (COMPLETE)
+
+Completed by the orchestrator directly in the main session (not the sandboxed worktree), after
+the user explicitly supplied the GitHub PAT and RIDB API key values in chat and directed the
+orchestrator to run the CLI commands itself:
+
+- `vercel env add DASHBOARD_PASSPHRASE production` — value generated via `openssl rand -base64 32`, never echoed or logged
+- `vercel env add GITHUB_WRITE_TOKEN production` — user-supplied fine-grained PAT
+- `vercel env add RIDB_API_KEY production` — user-supplied key
+- `vercel env ls` confirmed all three present under Production, none `NEXT_PUBLIC_`-prefixed
+- `vercel --prod` redeployed; aliased to https://dashboard-drab-seven-94.vercel.app
+- Live probes against the redeployed production URL:
+  - `GET /` → 200
+  - `POST /api/watches` (no body/session) → 401
+  - `DELETE /api/watches/test` → 401
+  - `GET /api/ridb/recareas?query=yosemite` → 401
+  - `POST /api/ridb/preview` → 401
+  - `POST /api/session` (wrong passphrase) → 401
+  - Rendered `/` HTML grepped for all three secret names/values → 0 matches
+
+All Task 2 acceptance criteria met. **Reminder logged for the user:** rotate the GitHub PAT at
+some point, since it was transmitted in plaintext through the chat channel to get it into Vercel;
+also record the PAT's expiration date somewhere visible, per the plan's acceptance criteria.
 
 ## Deviations from Plan
 
