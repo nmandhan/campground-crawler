@@ -29,6 +29,7 @@ const matchOutcome = {
       loop: 'LOOP A',
       siteType: 'tent' as const,
       facilityId: 232447,
+      facilityType: 'standard' as const,
       facilityName: 'Kirk Creek Campground',
       startDate: '2026-10-05',
       endDate: '2026-10-08',
