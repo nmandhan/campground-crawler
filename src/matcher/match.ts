@@ -49,6 +49,7 @@ export function matchWatch(slots: AvailabilitySlot[], watch: ResolvedWatch): Mat
       siteType: representative.siteType,
       facilityId: watch.facilityId,
       facilityName: watch.facilityName,
+      facilityType: watch.facilityType,   // D-05: group-vs-standard travels with the match
       startDate: watch.dateRange.start,
       endDate: watch.dateRange.end,
       bookingUrl: buildBookingUrl(campsiteId),

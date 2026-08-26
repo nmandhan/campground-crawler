@@ -41,12 +41,15 @@ export function buildBody(matches: MatchedSlot[]): string {
     return `${count} new ${noun} available.`;
   }
 
-  const groups = new Map<string, { facilityName: string; watchId: string; matches: MatchedSlot[] }>();
+  const groups = new Map<
+    string,
+    { facilityName: string; facilityType: 'standard' | 'group'; watchId: string; matches: MatchedSlot[] }
+  >();
   for (const m of matches) {
     const key = `${m.watchId} ${m.facilityName}`;
     let group = groups.get(key);
     if (!group) {
-      group = { facilityName: m.facilityName, watchId: m.watchId, matches: [] };
+      group = { facilityName: m.facilityName, facilityType: m.facilityType, watchId: m.watchId, matches: [] };
       groups.set(key, group);
     }
     group.matches.push(m);
@@ -54,7 +57,10 @@ export function buildBody(matches: MatchedSlot[]): string {
 
   const groupBlocks: string[] = [];
   for (const group of groups.values()) {
-    const lines: string[] = [`${sanitize(group.facilityName)} — watch "${sanitize(group.watchId)}"`];
+    // D-05: the user's real use case is 1-2 tent sites. A group campground must never
+    // be mistakable for one, so it is flagged in the section header, not buried.
+    const groupTag = group.facilityType === 'group' ? ' [GROUP]' : '';
+    const lines: string[] = [`${sanitize(group.facilityName)}${groupTag} — watch "${sanitize(group.watchId)}"`];
     for (const m of group.matches) {
       const loop = sanitize(m.loop);
       const loopPart = loop.length > 0 ? ` (Loop ${loop})` : '';
