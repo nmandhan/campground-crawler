@@ -922,5 +922,26 @@
       "upper-pines-labor-day",
       "kirk-creek-october"
     ]
+  },
+  {
+    "startedAt": "2026-08-26T04:20:17.597Z",
+    "finishedAt": "2026-08-26T04:20:18.052Z",
+    "checked": 2,
+    "outcomes": [
+      {
+        "watchId": "upper-pines-labor-day",
+        "status": "NO_MATCH"
+      },
+      {
+        "watchId": "kirk-creek-october",
+        "status": "NO_MATCH"
+      }
+    ],
+    "newMatches": [],
+    "failed": [],
+    "noMatch": [
+      "upper-pines-labor-day",
+      "kirk-creek-october"
+    ]
   }
 ]
