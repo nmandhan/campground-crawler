@@ -22,7 +22,7 @@ Full details archived: `.planning/milestones/v1.0-ROADMAP.md`
 
 **Milestone Goal:** Let the user search a broad geographic area for available campsites instead of pre-identifying one specific campground, and manage watches through the dashboard UI instead of hand-editing `watches.json`.
 
-- [ ] **Phase 4: Area-Based Search** - Poller can watch a whole Recreation Area, safely resolving and capping the campgrounds within it
+- [x] **Phase 4: Area-Based Search** - Poller can watch a whole Recreation Area, safely resolving and capping the campgrounds within it
 - [ ] **Phase 5: Watch-Management Write Path** - Dashboard gains a shared-secret-gated UI to create/edit/delete watches, including area lookup by name
 
 ## Phase Details
@@ -69,6 +69,6 @@ Phases execute in numeric order: 4 → 5
 | 1. Core Polling Engine | v1.0 | 4/4 | Complete | 2026-08-22 |
 | 2. Notification Delivery & Deployment | v1.0 | 3/4 | Complete (known gap) | 2026-08-25 |
 | 3. Status Dashboard | v1.0 | 5/5 | Complete | 2026-08-25 |
-| 4. Area-Based Search | v1.1 | 0/6 | Planned | - |
+| 4. Area-Based Search | v1.1 | 6/6 | Complete | 2026-08-26 |
 | 5. Watch-Management Write Path | v1.1 | 0/TBD | Not started | - |
 </content>
