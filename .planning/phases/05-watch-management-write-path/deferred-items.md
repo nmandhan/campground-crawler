@@ -31,7 +31,8 @@ relevant) to each `MatchedSlot` fixture literal in the four files above.
 plan adapted verification to target-check only its own modified files plus a before/after diff
 of the error set, confirming zero new errors introduced.
 
-**Status:** Deferred — out of scope for 05-01/05-02/05-04. Should be fixed by whichever later
-Phase 5 plan next touches these test files, or as a standalone chore before the phase closes —
-05-05 through 05-08 will hit the same `npm run typecheck`/build-failure wall otherwise, and the
-final wave (05-08)'s production-build auth probe explicitly depends on `next build` succeeding.
+**Status:** RESOLVED (orchestrator, post-Wave-1) — added `facilityType: 'standard'` to the
+four fixture literals above. `npm run typecheck` and `npm run build` both now exit 0. Fixed
+before Wave 2 rather than deferred further, since the final wave (05-08)'s production-build
+auth probe explicitly depends on `next build` succeeding, and every subsequent Phase 5 plan
+would otherwise have hit the same wall.
