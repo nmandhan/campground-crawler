@@ -39,12 +39,12 @@ Full details archived: `.planning/milestones/v1.0-ROADMAP.md`
 **Plans**: 6 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Capture live RIDB `/recareas` + `/recareas/{id}/facilities` shapes, land the two response schemas
-- [ ] 04-02-PLAN.md — `Watch` becomes a `FacilityWatch | AreaWatch` discriminated union (types + config schema, backward compatible)
-- [ ] 04-03-PLAN.md — `resolveArea()` / `listAreaFacilities()` with the campground allowlist, group tagging, and bounded hydration
-- [ ] 04-04-PLAN.md — Mirror the union into the dashboard; area labels, per-campground match attribution, truncation display
-- [ ] 04-05-PLAN.md — `resolveWatches()` area branch: per-run cache, dedup, shared 20-facility cap, truncation bookkeeping
-- [ ] 04-06-PLAN.md — `run.ts` group-by-watch-id aggregation, per-facility failure isolation, `[GROUP]` tag in the digest
+- [x] 04-01-PLAN.md — Capture live RIDB `/recareas` + `/recareas/{id}/facilities` shapes, land the two response schemas
+- [x] 04-02-PLAN.md — `Watch` becomes a `FacilityWatch | AreaWatch` discriminated union (types + config schema, backward compatible)
+- [x] 04-03-PLAN.md — `resolveArea()` / `listAreaFacilities()` with the campground allowlist, group tagging, and bounded hydration
+- [x] 04-04-PLAN.md — Mirror the union into the dashboard; area labels, per-campground match attribution, truncation display
+- [x] 04-05-PLAN.md — `resolveWatches()` area branch: per-run cache, dedup, shared 20-facility cap, truncation bookkeeping
+- [x] 04-06-PLAN.md — `run.ts` group-by-watch-id aggregation, per-facility failure isolation, `[GROUP]` tag in the digest
 
 ### Phase 5: Watch-Management Write Path
 **Goal**: User can fully manage watches — including area watches discoverable by name — through the dashboard UI, without hand-editing `watches.json`, with write actions gated behind a shared secret while existing read-only views stay public.
