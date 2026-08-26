@@ -24,9 +24,9 @@ function slot(
 function watch(overrides: Partial<ResolvedWatch> = {}): ResolvedWatch {
   return {
     id: 'watch-1',
-    parkName: 'Test Park',
     facilityId: 12345,
     facilityName: 'Test Facility',
+    facilityType: 'standard',
     dateRange: { start: '2026-09-04', end: '2026-09-07' },
     siteType: 'any',
     ...overrides,
@@ -123,7 +123,7 @@ test('three campsites all fully available produce 3 MatchedSlots, sorted by camp
   );
 });
 
-test('each MatchedSlot carries watchId, facilityId, facilityName, startDate, endDate, bookingUrl', () => {
+test('each MatchedSlot carries watchId, facilityId, facilityName, facilityType, startDate, endDate, bookingUrl', () => {
   const slots = [
     slot('100', '2026-09-04', true),
     slot('100', '2026-09-05', true),
@@ -136,9 +136,21 @@ test('each MatchedSlot carries watchId, facilityId, facilityName, startDate, end
   assert.equal(m.watchId, w.id);
   assert.equal(m.facilityId, w.facilityId);
   assert.equal(m.facilityName, w.facilityName);
+  assert.equal(m.facilityType, w.facilityType);
   assert.equal(m.startDate, w.dateRange.start);
   assert.equal(m.endDate, w.dateRange.end);
   assert.equal(m.bookingUrl, 'https://www.recreation.gov/camping/campsites/100');
+});
+
+test('a group-type watch produces matches carrying facilityType group', () => {
+  const slots = [
+    slot('100', '2026-09-04', true),
+    slot('100', '2026-09-05', true),
+    slot('100', '2026-09-06', true),
+  ];
+  const matches = matchWatch(slots, watch({ facilityType: 'group' }));
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0]!.facilityType, 'group');
 });
 
 test('slots for dates outside the watch range are ignored', () => {

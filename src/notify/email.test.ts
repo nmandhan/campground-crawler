@@ -13,6 +13,7 @@ function matched(over: Partial<MatchedSlot> = {}): MatchedSlot {
     siteType: 'tent',
     facilityId: 232447,
     facilityName: 'Upper Pines',
+    facilityType: 'standard',
     startDate: '2026-09-04',
     endDate: '2026-09-07',
     bookingUrl: 'https://www.recreation.gov/camping/campsites/12345',
@@ -68,6 +69,17 @@ test('buildBody: empty loop renders no loop fragment', () => {
   const body = buildBody([matched({ loop: '' })]);
   assert.ok(body.includes('Site 012: 2026-09-04 to 2026-09-07 (checkout)'));
   assert.equal(body.includes('(Loop )'), false);
+});
+
+test('buildBody: a group-type facility match includes [GROUP] tag in header', () => {
+  const body = buildBody([matched({ facilityType: 'group', facilityName: 'Hume Lake Group' })]);
+  assert.ok(body.includes('Hume Lake Group [GROUP]'));
+});
+
+test('buildBody: a standard-type facility match has no [GROUP] suffix', () => {
+  const body = buildBody([matched({ facilityType: 'standard', facilityName: 'Upper Pines' })]);
+  assert.ok(body.includes('Upper Pines — watch'));
+  assert.equal(body.includes('[GROUP]'), false);
 });
 
 test('buildBody: two matches sharing facility+watch grouped under one header', () => {
