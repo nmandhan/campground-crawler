@@ -35,10 +35,13 @@ Validated in Phase 3 (Status Dashboard), live-verified on Vercel:
 
 - [x] A hosted status page shows recent poll results and per-watch state as a near-term substitute for the (currently blocked) email path — live at https://dashboard-drab-seven-94.vercel.app, confirmed rendering real data end-to-end including a live poll cycle appearing within its cache window
 
+Validated in Phase 4 (Area-Based Search), live-verified against Recreation.gov RIDB API:
+
+- [x] User can search a general area/region for available campsites, not just one pre-identified campground — `type: "area"` watches resolve via RIDB's RecArea entity, filtered to reservable campgrounds (visitor centers/boat ramps/day-use excluded), capped at 20 shared facilities per watch, aggregated into one outcome per watch with per-campground attribution in match output; live-verified end-to-end (`resolveArea`/`listAreaFacilities` against real Sequoia/Sierra National Forest data, correct truncation, correct dedup/aggregation)
+
 ### Active
 
 - [ ] User receives an email when a watch finds a newly available matching site (Phase 2 — blocked on Resend domain verification; user declined to buy a domain, dashboard added as a near-term substitute)
-- [ ] User can search a general area/region for available campsites, not just one pre-identified campground (v1.1)
 - [ ] User can create/edit/delete watches through the dashboard UI, including picking an area and dates (v1.1)
 
 ### Out of Scope
@@ -90,4 +93,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-25 — started milestone v1.1 (Area Search)*
+*Last updated: 2026-08-26 — Phase 4 (Area-Based Search) complete*
