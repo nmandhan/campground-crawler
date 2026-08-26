@@ -3,26 +3,35 @@
 Out-of-scope discoveries logged during plan execution, not fixed per the scope-boundary rule
 (only auto-fix issues directly caused by the current task's changes).
 
-## Pre-existing typecheck failures (not caused by Phase 5)
+## Pre-existing typecheck/build failures (not caused by Phase 5)
 
-Independently discovered by both 05-01 and 05-02 during execution. `npm run typecheck` in
-`dashboard/` fails on pre-existing errors, all unrelated to those plans' files
-(`dashboard/lib/schema.ts`, `dashboard/lib/github-write.ts`, `dashboard/lib/ridb.ts`,
-`dashboard/lib/session.ts`):
+Independently discovered by 05-01, 05-02, and 05-04 during execution — each confirmed it was
+present on the base commit (`196161fa35ad1d9a1b5699f6a232fbba49adb5c6`) before any Phase 5
+changes, by stashing their own diffs and re-running the check. `npm run typecheck` (and
+`next build`'s type-check step) in `dashboard/` fails on the same pre-existing errors, unrelated
+to any Phase 5 file:
 
-- `lib/derive-status.test.ts` (2 errors) — `MatchedSlot` literal missing `facilityType`
-- `lib/derive-timeline.test.ts` (3 errors) — same root cause, `WatchOutcome`/`MatchedSlot` literals missing `facilityType`
-- `lib/page-data.test.ts` (1 error) — same root cause
-- `lib/schema.test.ts` (1 error) — the pre-existing `validRun` fixture is missing `facilityType` on its `MatchedSlot` literal
+- `lib/derive-status.test.ts` (2 errors)
+- `lib/derive-timeline.test.ts` (3 errors)
+- `lib/page-data.test.ts` (1 error)
+- `lib/schema.test.ts` (1 error)
 
-Root cause: Phase 4 added a required `facilityType: 'standard' | 'group'` field to `MatchedSlot`
-in `dashboard/lib/types.ts` (commits `7051d27` "feat(04-04): mirror Watch union and outcome
-fields into dashboard/lib" and `dcd5291`), but these four pre-existing test fixtures were never
-updated to include it. `npm test` still passes because these are compile-time-only errors — the
-test runner (`tsx`) doesn't do full type-checking; only `tsc --noEmit` (`npm run typecheck`)
-catches this.
+**Cause:** Phase 4 added a required `facilityType: 'standard' | 'group'` field to `MatchedSlot`
+(`dashboard/lib/types.ts:56`, commits `7051d27`/`dcd5291` — area-based search `[GROUP]` tag
+support), but these four pre-existing test fixtures were never updated to include it. `npm test`
+still passes because these are compile-time-only errors — the test runner (`tsx`) doesn't do
+full type-checking; only `tsc --noEmit` (`npm run typecheck`) and `next build` catch it, with
+`TS2741: Property 'facilityType' is missing in type ... but required in type 'MatchedSlot'`.
 
-**Status:** Deferred — out of scope for both 05-01 and 05-02 (files not modified by either
-plan). Should be fixed by whichever later Phase 5 plan next touches these test files, or as a
-standalone chore before the phase closes — later plans (05-05 through 05-08) will hit the same
-`npm run typecheck`/build-failure wall otherwise.
+**Fix (not applied by any Phase 5 plan):** add `facilityType: 'standard'` (or `'group'` where
+relevant) to each `MatchedSlot` fixture literal in the four files above.
+
+**Impact:** Because this failure is independent of any Phase 5 file, `npm run build` and
+`npm run typecheck` cannot exit 0 for *any* plan in this phase until it's fixed. Each affected
+plan adapted verification to target-check only its own modified files plus a before/after diff
+of the error set, confirming zero new errors introduced.
+
+**Status:** Deferred — out of scope for 05-01/05-02/05-04. Should be fixed by whichever later
+Phase 5 plan next touches these test files, or as a standalone chore before the phase closes —
+05-05 through 05-08 will hit the same `npm run typecheck`/build-failure wall otherwise, and the
+final wave (05-08)'s production-build auth probe explicitly depends on `next build` succeeding.

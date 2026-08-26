@@ -139,3 +139,277 @@ body {
   margin: 0 0 var(--space-sm) 0;
 }
 .error-body { font-size: var(--text-body); margin: 0; }
+
+/* --- Phase 5: watch management (05-UI-SPEC.md) ------------------------------
+   No new custom properties. Every value below resolves to an existing --space-*,
+   --text-*, --weight-*, or --color-* token, with two documented exceptions the
+   UI-SPEC calls out explicitly: the 44px minimum touch target (this phase adds the
+   dashboard's first clickable controls) and the toast's fixed 24px viewport offset. */
+.manage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.btn {
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.btn--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-bg);
+  font-weight: var(--weight-semibold);
+}
+.btn--destructive {
+  background: var(--color-destructive);
+  border-color: var(--color-destructive);
+  color: var(--color-bg);
+}
+.btn--ghost {
+  background: transparent;
+  color: var(--color-text);
+}
+.btn--icon {
+  min-width: 44px;
+  padding: var(--space-xs);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.toggle-option {
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
+  border: none;
+  border-radius: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.toggle-option--active {
+  background: var(--color-accent);
+  color: var(--color-bg);
+  font-weight: var(--weight-semibold);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.field-label {
+  font-size: var(--text-meta);
+  color: var(--color-meta);
+}
+.field-input {
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  padding: var(--space-sm);
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.field-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+.field-error {
+  font-size: var(--text-meta);
+  color: var(--color-destructive);
+}
+
+.form-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+.form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: var(--text-body);
+}
+.chip-remove {
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-meta);
+  font-size: var(--text-body);
+}
+
+.typeahead {
+  position: relative;
+}
+.typeahead-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.typeahead-option {
+  padding: var(--space-sm);
+  font-size: var(--text-body);
+  cursor: pointer;
+}
+.typeahead-option--active {
+  background: var(--color-surface);
+}
+.typeahead-hint {
+  font-size: var(--text-meta);
+  color: var(--color-meta);
+  padding: var(--space-sm);
+}
+
+.preview {
+  background: var(--color-surface);
+  padding: var(--space-lg);
+  border-radius: 4px;
+}
+.preview-heading {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  color: var(--color-accent);
+  margin: 0 0 var(--space-sm);
+}
+.preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-body);
+}
+.preview-tag {
+  /* neutral gray, deliberately not a new semantic color */
+  color: var(--color-meta);
+  font-size: var(--text-meta);
+  margin-left: var(--space-xs);
+}
+.preview-truncated {
+  font-size: var(--text-meta);
+  color: var(--color-destructive);
+  margin-top: var(--space-sm);
+}
+
+.dialog {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: var(--space-lg);
+  background: var(--color-bg);
+  color: var(--color-text);
+  max-width: 640px;
+  width: 100%;
+}
+.dialog--confirm {
+  max-width: 420px;
+}
+.dialog::backdrop {
+  /* Documented exception: ::backdrop cannot reference a custom property token here.
+     This is --color-text at 40% alpha (rgba equivalent of its hex value), not a new
+     palette entry. */
+  background: rgba(17, 24, 39, 0.4);
+}
+.dialog-heading {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  color: var(--color-accent);
+  margin: 0 0 var(--space-lg);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-xl);
+}
+
+.unlock {
+  background: var(--color-surface);
+  padding: var(--space-lg);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.unlock-heading {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  color: var(--color-accent);
+  margin: 0;
+}
+.unlock-body {
+  font-size: var(--text-meta);
+  color: var(--color-meta);
+  margin: 0;
+}
+.unlock-form {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+}
+
+.toast {
+  /* D-12 banner — not a modal; must not block interaction with the page underneath */
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: var(--space-lg);
+  font-size: var(--text-meta);
+}
