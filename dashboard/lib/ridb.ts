@@ -162,3 +162,76 @@ export async function listAreaFacilities(recAreaId: number, opts?: RidbOptions):
     };
   }
 }
+
+export interface PreviewArea {
+  name?: string;
+  recAreaId?: number;
+}
+export interface PreviewAreaError {
+  area: string;
+  error: string;
+}
+export type PreviewResult = {
+  ok: true;
+  facilities: AreaFacility[];
+  truncated?: TruncationInfo;
+  areaErrors: PreviewAreaError[];
+};
+
+/** MGMT-05 / D-09 / D-10: resolves the currently-selected area chips to the exact campgrounds
+ *  the poller would check, so the user can catch a wrong area match BEFORE saving.
+ *
+ *  Mirrors src/config/watches.ts's resolveWatches() area branch exactly — same per-area dedup by
+ *  facilityId, same RIDB order (never re-sorted, D-09), same cap applied AFTER filter+dedup
+ *  (D-07). If these two ever diverge, the preview lies.
+ *
+ *  Per-area failures are returned in `areaErrors` rather than thrown: one bad chip must never
+ *  blank the whole preview (project convention — a per-unit failure is isolated).
+ *
+ *  READ ONLY. The returned list is never persisted (ARCHITECTURE.md Anti-Pattern 1).
+ */
+export async function previewAreas(areas: PreviewArea[], opts?: RidbOptions): Promise<PreviewResult> {
+  const seen = new Set<number>();
+  const collected: AreaFacility[] = [];
+  const areaErrors: PreviewAreaError[] = [];
+  const resolvedCache = new Map<string, Promise<FacilitiesResult>>();
+
+  for (const area of areas) {
+    const cacheKey = area.recAreaId !== undefined ? `id:${area.recAreaId}` : `name:${area.name ?? ''}`;
+
+    let pending = resolvedCache.get(cacheKey);
+    if (!pending) {
+      pending = (async (): Promise<FacilitiesResult> => {
+        let recAreaId = area.recAreaId;
+        if (recAreaId === undefined) {
+          const searchResult = await searchRecAreas(area.name ?? '', opts);
+          if (!searchResult.ok) return searchResult;
+          if (searchResult.areas.length === 0) {
+            return { ok: false, error: `no Recreation Area matched "${area.name}"` };
+          }
+          recAreaId = searchResult.areas[0]!.recAreaId;
+        }
+        return listAreaFacilities(recAreaId, opts);
+      })();
+      resolvedCache.set(cacheKey, pending);
+    }
+
+    const result = await pending;
+    if (!result.ok) {
+      areaErrors.push({ area: area.name ?? String(area.recAreaId), error: result.error });
+      continue;
+    }
+
+    for (const f of result.facilities) {
+      // never re-sorted
+      if (seen.has(f.facilityId)) continue;
+      seen.add(f.facilityId);
+      collected.push(f);
+    }
+  }
+
+  const kept = collected.slice(0, AREA_FACILITY_CAP);
+  const truncated = collected.length > kept.length ? { requested: collected.length, kept: kept.length } : undefined;
+
+  return { ok: true, facilities: kept, truncated, areaErrors };
+}
