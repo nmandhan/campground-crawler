@@ -11,9 +11,12 @@ Requirements for the Area Search milestone. Each maps to roadmap phases.
 
 **Scope note:** Recreation.gov/RIDB only catalogs federal recreation land (National Parks, National Forests, BLM, Army Corps, etc.) — the same federal-only scope v1.0 already committed to. City-run and private campgrounds are not in this data source at all and are not addressed by any requirement below; expanding to non-federal data sources is a separate, larger scope decision, not part of v1.1.
 
-- [ ] **AREA-01**: User can define a watch for one or more named Recreation Areas (park/forest) instead of one specific campground, and the system checks availability across every campground in the selected area(s)
-- [ ] **AREA-02**: Area watches are capped at a maximum combined number of facilities across all selected areas (~15-25) with a truncation indicator, protecting the existing rate-limit budget
-- [ ] **AREA-03**: Area watch facility resolution filters out non-campground facility types (visitor centers, boat ramps, group day-use areas, etc.) to avoid a wrong-match failure at region scale (the v1.0 "BANDIDO" bug class)
+- [x] **AREA-01
+**: User can define a watch for one or more named Recreation Areas (park/forest) instead of one specific campground, and the system checks availability across every campground in the selected area(s)
+- [x] **AREA-02
+**: Area watches are capped at a maximum combined number of facilities across all selected areas (~15-25) with a truncation indicator, protecting the existing rate-limit budget
+- [x] **AREA-03
+**: Area watch facility resolution filters out non-campground facility types (visitor centers, boat ramps, group day-use areas, etc.) to avoid a wrong-match failure at region scale (the v1.0 "BANDIDO" bug class)
 - [ ] **AREA-04**: User can find a Recreation Area by name (typeahead search) rather than needing to already know its numeric RIDB ID
 - [ ] **AREA-05**: When an area watch matches, the notification/dashboard shows which specific campground(s) within the area(s) matched, not just the area name
 
