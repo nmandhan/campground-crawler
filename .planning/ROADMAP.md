@@ -56,7 +56,18 @@ Plans:
   3. User can edit an existing watch and delete a watch through the dashboard UI
   4. Before saving an area watch, the user sees a preview of which actual campgrounds it resolves to across all selected areas
   5. Write actions (create/edit/delete) require a valid shared secret and are rejected without one, while existing read-only dashboard views remain public and unauthenticated
-**Plans**: TBD
+**Plans**: 8 plans (5 waves)
+
+Plans:
+- [ ] 05-01-PLAN.md — Strict write-path watch schema + GitHub Contents API write module (GET-sha/PUT/409 retry)
+- [ ] 05-02-PLAN.md — Dashboard-side read-only RIDB client (area search, facility classification, capped multi-area preview) + session cookie contract
+- [ ] 05-03-PLAN.md — Next.js 16 `proxy.ts` auth gate + session, watch CRUD, and RIDB proxy Route Handlers
+- [ ] 05-04-PLAN.md — UI vocabulary: COPY keys, design-token CSS classes, inline unlock prompt
+- [ ] 05-05-PLAN.md — Manage Watches section: watch list, lock gate, confirmed delete, toast, page.tsx wiring
+- [ ] 05-06-PLAN.md — Debounced Recreation Area typeahead with chips + auto-refreshing campground preview
+- [ ] 05-07-PLAN.md — Create/edit modal with Facility/Area toggle, wired to POST/PATCH
+- [ ] 05-08-PLAN.md — Production-build auth-gate probe, Vercel secret provisioning, end-to-end verification
+
 **UI hint**: yes
 
 ## Progress
@@ -70,5 +81,5 @@ Phases execute in numeric order: 4 → 5
 | 2. Notification Delivery & Deployment | v1.0 | 3/4 | Complete (known gap) | 2026-08-25 |
 | 3. Status Dashboard | v1.0 | 5/5 | Complete | 2026-08-25 |
 | 4. Area-Based Search | v1.1 | 6/6 | Complete | 2026-08-26 |
-| 5. Watch-Management Write Path | v1.1 | 0/TBD | Not started | - |
+| 5. Watch-Management Write Path | v1.1 | 0/8 | Planned | - |
 </content>
