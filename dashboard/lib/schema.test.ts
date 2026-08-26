@@ -1,7 +1,7 @@
-import { test } from 'node:test';
+import { test, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWatches, parseStateFile, parseRunLog } from './schema';
-import type { RunSummary } from './types';
+import { parseWatches, parseStateFile, parseRunLog, parseStrictWatch, assertUniqueId } from './schema';
+import type { RunSummary, Watch } from './types';
 
 // Real watches.json payload (2026-08-23).
 const realWatches = [
@@ -248,4 +248,127 @@ test('WatchOutcomeSchema still accepts a NO_MATCH outcome with no truncated fiel
     assert.equal(result.data.length, 1);
     assert.equal(result.skipped, 0);
   }
+});
+
+describe('StrictWatchSchema', () => {
+  const validFacility = {
+    type: 'facility',
+    id: 'kirk-creek',
+    parkName: 'Kirk Creek Campground',
+    dateRange: { start: '2026-09-01', end: '2026-09-03' },
+    siteType: 'any',
+  };
+
+  const validArea = {
+    type: 'area',
+    id: 'los-padres',
+    areas: [{ name: 'Los Padres National Forest' }],
+    dateRange: { start: '2026-09-01', end: '2026-09-03' },
+    siteType: 'tent',
+  };
+
+  it('accepts a valid facility watch', () => {
+    const result = parseStrictWatch(validFacility);
+    assert.equal(result.ok, true);
+  });
+
+  it('accepts a valid area watch with one area', () => {
+    const result = parseStrictWatch(validArea);
+    assert.equal(result.ok, true);
+  });
+
+  it('rejects id: ""', () => {
+    const result = parseStrictWatch({ ...validFacility, id: '' });
+    assert.equal(result.ok, false);
+  });
+
+  it('rejects a facility watch with parkName: ""', () => {
+    const result = parseStrictWatch({ ...validFacility, parkName: '' });
+    assert.equal(result.ok, false);
+  });
+
+  it('rejects an area watch with areas: [] (message mentions at least one area)', () => {
+    const result = parseStrictWatch({ ...validArea, areas: [] });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /at least one area/);
+    }
+  });
+
+  it('rejects an area watch with areas: [{ name: "" }]', () => {
+    const result = parseStrictWatch({ ...validArea, areas: [{ name: '' }] });
+    assert.equal(result.ok, false);
+  });
+
+  it('rejects dateRange with start after end', () => {
+    const result = parseStrictWatch({
+      ...validFacility,
+      dateRange: { start: '2026-09-03', end: '2026-09-01' },
+    });
+    assert.equal(result.ok, false);
+  });
+
+  it('rejects dateRange with start equal to end (end is exclusive checkout)', () => {
+    const result = parseStrictWatch({
+      ...validFacility,
+      dateRange: { start: '2026-09-01', end: '2026-09-01' },
+    });
+    assert.equal(result.ok, false);
+  });
+
+  it('rejects a dateRange not in YYYY-MM-DD format', () => {
+    const result = parseStrictWatch({
+      ...validFacility,
+      dateRange: { start: '09/01/2026', end: '09/03/2026' },
+    });
+    assert.equal(result.ok, false);
+  });
+
+  it('rejects an object with no type field', () => {
+    const { type, ...untyped } = validFacility;
+    void type;
+    const result = parseStrictWatch(untyped);
+    assert.equal(result.ok, false);
+  });
+
+  it('returns { ok: true, data } on success and { ok: false, error } with path: message on failure', () => {
+    const success = parseStrictWatch(validFacility);
+    assert.equal(success.ok, true);
+    const failure = parseStrictWatch({ ...validFacility, id: '' });
+    assert.equal(failure.ok, false);
+    if (!failure.ok) {
+      assert.match(failure.error, /:/);
+    }
+  });
+});
+
+describe('assertUniqueId', () => {
+  const watches: Watch[] = [
+    {
+      type: 'facility',
+      id: 'kirk-creek',
+      parkName: 'Kirk Creek Campground',
+      dateRange: { start: '2026-09-01', end: '2026-09-03' },
+      siteType: 'any',
+    },
+    {
+      type: 'facility',
+      id: 'upper-pines',
+      parkName: 'Upper Pines Campground',
+      dateRange: { start: '2026-09-01', end: '2026-09-03' },
+      siteType: 'any',
+    },
+  ];
+
+  it('returns true when the id is free', () => {
+    assert.equal(assertUniqueId(watches, 'new-watch'), true);
+  });
+
+  it('returns false when another watch already uses it', () => {
+    assert.equal(assertUniqueId(watches, 'kirk-creek'), false);
+  });
+
+  it('returns true when the colliding id is the ignoreId (editing without renaming)', () => {
+    assert.equal(assertUniqueId(watches, 'kirk-creek', 'kirk-creek'), true);
+  });
 });
