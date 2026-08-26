@@ -17,6 +17,7 @@ import { COPY } from '@/lib/copy';
 import type { Watch } from '@/lib/types';
 import { formatWatchLocation, formatWatchDates, formatSiteType, formatWatchKind } from '@/lib/format-watch';
 import { UnlockPrompt } from './unlock-prompt';
+import { WatchForm } from './watch-form';
 
 export function WatchManager({
   watches: initialWatches,
@@ -31,6 +32,10 @@ export function WatchManager({
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  /** null while creating; the watch being edited otherwise. */
+  const [editing, setEditing] = useState<Watch | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const confirmRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -70,11 +75,58 @@ export function WatchManager({
     }
   }
 
+  async function handleSave(watch: Watch) {
+    setBusy(true);
+    setFormError(null);
+    const isEdit = editing !== null;
+    const url = isEdit ? `/api/watches/${encodeURIComponent(editing.id)}` : '/api/watches';
+    try {
+      const res = await fetch(url, {
+        method: isEdit ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(watch),
+      });
+      const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (res.ok && body.ok) {
+        setWatches((prev) =>
+          isEdit ? prev.map((w) => (w.id === editing.id ? watch : w)) : [...prev, watch]
+        );
+        setFormOpen(false);
+        setEditing(null);
+        setToast(COPY.savedToast);
+      } else if (res.status === 401) {
+        setUnlocked(false); // the ~30d cookie expired mid-session
+        setFormOpen(false);
+        setError(COPY.unlockHeading);
+      } else {
+        // Modal STAYS OPEN with the reason visible: closing it would discard everything the user
+        // typed on a recoverable failure like a duplicate id (409) or a validation error (400).
+        setFormError(COPY.saveFailed.replace('{reason}', body.error ?? ''));
+      }
+    } catch {
+      setFormError(COPY.saveFailed.replace('{reason}', ''));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="section" aria-label={COPY.sectionManageWatches}>
       <div className="manage-header">
         <h2 className="section-heading">{COPY.sectionManageWatches}</h2>
-        {/* The + Add Watch CTA belongs here — added in plan 05-06 with the form it opens. */}
+        {unlocked ? (
+          <button
+            className="btn btn--primary"
+            type="button"
+            onClick={() => {
+              setEditing(null);
+              setFormError(null);
+              setFormOpen(true);
+            }}
+          >
+            {COPY.addWatch}
+          </button>
+        ) : null}
       </div>
 
       {!unlocked ? <UnlockPrompt onUnlocked={() => setUnlocked(true)} /> : null}
@@ -95,14 +147,28 @@ export function WatchManager({
                 </div>
               </div>
               {unlocked ? (
-                <button
-                  className="btn btn--icon btn--destructive"
-                  type="button"
-                  aria-label={COPY.deleteWatchLabel.replace('{watch}', w.id)}
-                  onClick={() => setPendingDelete(w)}
-                >
-                  ×
-                </button>
+                <>
+                  <button
+                    className="btn btn--icon"
+                    type="button"
+                    aria-label={COPY.editWatchLabel.replace('{watch}', w.id)}
+                    onClick={() => {
+                      setEditing(w);
+                      setFormError(null);
+                      setFormOpen(true);
+                    }}
+                  >
+                    ✎
+                  </button>
+                  <button
+                    className="btn btn--icon btn--destructive"
+                    type="button"
+                    aria-label={COPY.deleteWatchLabel.replace('{watch}', w.id)}
+                    onClick={() => setPendingDelete(w)}
+                  >
+                    ×
+                  </button>
+                </>
               ) : null}
             </li>
           ))}
@@ -114,6 +180,19 @@ export function WatchManager({
           {error}
         </p>
       ) : null}
+
+      <WatchForm
+        open={formOpen}
+        initial={editing}
+        submitting={busy}
+        serverError={formError}
+        onSubmit={handleSave}
+        onCancel={() => {
+          setFormOpen(false);
+          setEditing(null);
+          setFormError(null);
+        }}
+      />
 
       <dialog
         className="dialog dialog--confirm"
