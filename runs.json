@@ -1,26 +1,5 @@
 [
   {
-    "startedAt": "2026-08-25T11:41:29.439Z",
-    "finishedAt": "2026-08-25T11:41:29.795Z",
-    "checked": 2,
-    "outcomes": [
-      {
-        "watchId": "upper-pines-labor-day",
-        "status": "NO_MATCH"
-      },
-      {
-        "watchId": "kirk-creek-october",
-        "status": "NO_MATCH"
-      }
-    ],
-    "newMatches": [],
-    "failed": [],
-    "noMatch": [
-      "upper-pines-labor-day",
-      "kirk-creek-october"
-    ]
-  },
-  {
     "startedAt": "2026-08-25T12:01:07.240Z",
     "finishedAt": "2026-08-25T12:01:07.710Z",
     "checked": 2,
@@ -1048,5 +1027,25 @@
       "upper-pines-labor-day",
       "kirk-creek-october"
     ]
+  },
+  {
+    "startedAt": "2026-08-27T02:11:40Z",
+    "finishedAt": "2026-08-27T02:11:40Z",
+    "checked": 0,
+    "outcomes": [
+      {
+        "watchId": "(run)",
+        "status": "FAILED",
+        "reason": "poller exited without producing a run summary"
+      }
+    ],
+    "newMatches": [],
+    "failed": [
+      {
+        "watchId": "(run)",
+        "reason": "poller exited without producing a run summary"
+      }
+    ],
+    "noMatch": []
   }
 ]
