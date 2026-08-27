@@ -40,6 +40,44 @@
 
 ---
 
+## Milestone: v1.1 — Area Search
+
+**Shipped:** 2026-08-27
+**Phases:** 2 | **Plans:** 14/14
+
+### What Was Built
+- Area-based watches (`FacilityWatch | AreaWatch` discriminated union): a single watch can target one or more named Recreation Areas, resolved to real, filtered, capped campground lists at poll time via RIDB's RecArea entity.
+- Per-campground match attribution and group-vs-standard tagging, so an area watch's match output names the exact campground that opened, plus a shared 20-facility cap with truncation surfaced in both match output and run history.
+- A full dashboard write path: shared-secret session-cookie auth gate (`proxy.ts` + defense-in-depth per-route checks), GitHub Contents API write module (sha-based optimistic concurrency), and a create/edit/delete UI with a Recreation Area typeahead and live campground preview.
+- End-to-end live verification against production — real dashboard-authored commits, a real poll run resolving real area watches on GitHub Actions, and a full human UAT walkthrough of the deployed write path.
+
+### What Worked
+- Running phase-specific research even when milestone-level research already existed paid off directly: it caught the Next.js 16 `middleware.ts`→`proxy.ts` silent-rename trap before any code was written, which would have shipped the entire auth gate as a silent no-op.
+- The UI-SPEC gate (blocking `/gsd-plan-phase` until a design contract existed) worked as intended — the UI researcher needed zero user questions because CONTEXT.md and RESEARCH.md were already sufficiently prescriptive, and the checker caught one real generic-CTA-label violation before planning began.
+- Wave-based parallel worktree execution across 5 waves (8 plans) had zero real merge conflicts — only trivial three-way collisions on a shared `deferred-items.md` doc file (independently discovered the same pre-existing bug from three different plans), never on source code.
+- Treating the final wave's live human-verify checkpoint as genuinely load-bearing (not a formality) caught real bugs that no unit test could: a RIDB search-relevance bug, a passphrase-provisioning trailing-newline bug, and — most importantly — that two entire phases had never been pushed to GitHub.
+
+### What Was Inefficient
+- **The single biggest process failure this milestone: Phase 4 and Phase 5's entire execution history was never pushed to `origin/main`.** Every wave merged worktree branches locally and committed, but nothing was ever `git push`ed to the remote. This went undetected for the whole of Phase 5 because `vercel --prod` deploys directly from local files, not from git — so the *deployed dashboard* worked throughout, masking that the *poller* (which checks out `origin/main` via GitHub Actions) was still running pre-Phase-4 code. It was only caught by chance, because the orchestrator manually triggered a poll run during final verification instead of waiting on GitHub's cron. Had that manual trigger not happened, this would have shipped completely broken with no signal until the user's actual watches silently stopped being checked in production.
+- A code-review pass run at the very end of the phase (after live UAT had already passed) surfaced 8 real findings, including a data-loss bug (editing a facility watch drops its `facilityId` override) that would have been cheaper to catch and fix mid-phase, before the UI/API contract solidified across three later plans.
+- The orchestrator's own git-push discipline was the root cause above — committing locally after every wave was treated as "done," when the actual finish line for shared-repo work is the remote, not the local `HEAD`.
+
+### Patterns Established
+- **Verify a "silent failure mode" flagged by research with an actual reproduction, not just a code read.** The `proxy.ts` rename trap was confirmed by a committed script that runs a real `next build && next start` and curls it — this is what actually proved the fix worked, not reading the file and confirming the name looked right.
+- **When a phase's final wave includes a live human-verify checkpoint, treat every bug the user reports during it as first-class phase output, not "the phase is basically done, this is cleanup."** Two of the four bugs found during Phase 5's live UAT were more severe than anything the automated verification had caught.
+- **After merging worktree branches for a wave, push to the remote before considering the wave — or the phase — actually finished.** Local `git merge` + commit is not the same as "this work exists somewhere durable and is what CI/production will actually run."
+
+### Key Lessons
+1. **A deployment path that bypasses git (like `vercel --prod` deploying from local files) can hide an arbitrarily large git-sync gap indefinitely** — the dashboard "working" is not evidence that the repo is in a consistent, pushed state. Any project with more than one deploy mechanism should treat "is this pushed to the remote?" as a standing verification step, not an assumption.
+2. **Milestone-level research done before a phase split (research written for "both Phase A and Phase B" before either was planned) can go stale on exactly the boundary between the two phases** — this milestone's `ARCHITECTURE.md` correctly warned against resolving area→facility in the write path, but didn't anticipate that the *typeahead and preview* features (added in the later phase) would need their own read-only RIDB client, creating a plausible-sounding but incomplete "anti-pattern" warning that phase-specific research had to correctly narrow.
+3. **A live production UAT checkpoint is worth its wall-clock cost even after all automated checks pass** — this milestone's most severe bugs (data-loss-adjacent facilityId drop, the entire git-push gap) were only found because a human actually used the deployed feature, not because a test suite grew large enough.
+
+### Cost Observations
+- Sessions: 1 long session covering Phase 5 discussion through milestone close (Phase 4 measured separately, not repeated here)
+- Notable: Phase 5's 5-wave, 8-plan execution used parallel worktree agents for waves with 2+ plans (Waves 1 and 3) and solo worktree agents for single-plan waves (2, 4, 5) — post-merge test/build gates caught zero cross-plan regressions across all 5 waves.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -47,13 +85,17 @@
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
 | v1.0 | 1 (measured) | 3 | Established the deployment-agnostic-core pattern in Phase 1; validated it paid off when Phase 3 added an entirely independent dashboard project with zero poller changes |
+| v1.1 | 1 (measured) | 2 | Discovered that local git commits are not equivalent to shipped work — two phases executed and merged locally without ever being pushed to `origin/main`, undetected until a manual poll-run trigger during final verification |
 
 ### Cumulative Quality
 
 | Milestone | Tests | Coverage | Zero-Dep Additions |
 |-----------|-------|----------|---------------------|
 | v1.0 | 229 (161 poller + 68 dashboard) | Not measured | resend, zod (poller); next, zod (dashboard, independent project) |
+| v1.1 | 375 (216 poller + 159 dashboard) | Not measured | none — dashboard write path built with zero new dependencies beyond next/react/zod |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Check a diff's behavior change against the phase's locked `*-CONTEXT.md` decisions before calling it a regression.
+2. Local `git commit` is not "done" for shared-repo work — push to the remote after every wave/phase, and treat "is this actually on `origin/main`?" as a standing verification step, especially when a second deploy path (e.g. `vercel --prod` from local files) can mask the gap indefinitely.
+3. A live human-verify checkpoint against the real deployed system, run after all automated checks pass, reliably surfaces the most severe bugs a milestone will find — budget for it, don't treat it as a formality.
