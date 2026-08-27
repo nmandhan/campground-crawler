@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Area Search
 status: completed
-stopped_at: Phase 5 UI-SPEC approved
+stopped_at: v1.1 Area Search milestone archived and tagged
 last_updated: "2026-08-27T02:39:18.754Z"
 last_activity: 2026-08-27
 progress:
@@ -18,34 +18,35 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-25)
+See: .planning/PROJECT.md (updated 2026-08-27)
 
 **Core value:** When a watched campsite becomes available on Recreation.gov, the user gets an email fast enough to actually book it before someone else does. (Currently delivered via a status dashboard until email is unblocked.)
-**Current focus:** Phase 5 — watch-management-write-path
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
+Phase: none (v1.1 complete)
+Plan: none
 Status: Milestone complete
 Last activity: 2026-08-27
 
 Carried-forward context (see PROJECT.md Context/Constraints and MILESTONES.md Known Gaps for detail):
 
 - Poller live in production: GitHub Actions 5-min cron, public repo, secrets provisioned, dedup/match/commit-back
-  confirmed live against a real Kirk Creek opening.
+  confirmed live against a real Kirk Creek opening, and again live-verified after v1.1's area-watch changes.
 
 - Email send blocked on Resend 422 "The domain is invalid" — account has no onboarding@resend.dev shared-domain
   access. User declined to buy a domain. Email code is complete and unit-tested; only live verification is
   outstanding.
 
-- Status dashboard live at https://dashboard-drab-seven-94.vercel.app as the interim substitute, verified
-  end-to-end including live freshness (a real poll cycle appearing within its cache window).
+- Status dashboard live at https://dashboard-drab-seven-94.vercel.app, now with a full shared-secret-gated
+  write path (create/edit/delete watches, area typeahead + preview) — live-verified end-to-end including
+  real dashboard-authored commits and a real poll run picking them up.
 
-- Phase 5 (write path) depends on Phase 4's finalized `Watch` discriminated-union type — do not build the
-  create/edit form until Phase 4 ships.
+- v1.1's Phase 4 (Area-Based Search) and Phase 5 (Watch-Management Write Path) are both complete and archived
+  to `.planning/milestones/v1.1-phases/`.
 
-Progress: [██████████] 100% (Phase 4 complete, Phase 5 not started)
+Progress: [██████████] 100% (v1.1 Area Search milestone shipped)
 
 ## Performance Metrics
 
@@ -74,18 +75,11 @@ Progress: [██████████] 100% (Phase 4 complete, Phase 5 not s
 
 ### Decisions
 
-Full decision log is in PROJECT.md Key Decisions table (all v1.0 decisions resolved with outcomes at milestone close).
-
-Research-driven decisions for v1.1 (see `.planning/research/SUMMARY.md`):
-
-- Area search resolves at poll time (not frozen into watches.json), reusing `resolveWatches()`'s existing cache/error-isolation pattern.
-- Watch-management write path uses the GitHub Contents API (sha-based PUT) called from Next.js Route Handlers with a fine-grained PAT — no database, no GitHub App.
-- Write UI gated by a minimal server-side shared secret (not OAuth) — single named user, per existing no-multi-user constraint.
-- `watches.json` single-writer invariant flips: the poller becomes read-only on this file, the dashboard becomes its sole writer.
+Full decision log is in PROJECT.md Key Decisions table. All v1.0 and v1.1 decisions resolved with outcomes at their respective milestone closes.
 
 ### Roadmap Evolution
 
-v1.0 roadmap archived to `.planning/milestones/v1.0-ROADMAP.md`. v1.1 roadmap adds Phase 4 (Area-Based Search) and Phase 5 (Watch-Management Write Path), sequenced per research (area search first — pure `src/` change, no new I/O/auth surface; write UI second — depends on Phase 4's finalized `Watch` type).
+v1.0 roadmap archived to `.planning/milestones/v1.0-ROADMAP.md`. v1.1 roadmap (Phase 4: Area-Based Search, Phase 5: Watch-Management Write Path) archived to `.planning/milestones/v1.1-ROADMAP.md`. ROADMAP.md now shows both milestones collapsed to one-line summaries; awaiting `/gsd-new-milestone` for the next milestone's phases.
 
 ### Pending Todos
 
@@ -94,20 +88,23 @@ None yet.
 ### Blockers/Concerns
 
 - **Email delivery unverified live:** NOTF-01/02/03 remain code-complete but blocked on Resend domain verification (Resend 422 "The domain is invalid" — no `onboarding@resend.dev` shared-domain access). User declined to buy a domain during v1.0. Revisit once a domain exists; no code changes expected, only live re-verification. See MILESTONES.md Known Gaps.
-- **RIDB geo-search field names unverified live:** exact query params (`radius`, `activity` code for camping) and facility-type/reservable filter fields are MEDIUM/LOW confidence per research — recommend a fixture-capture spike against a real `RIDB_API_KEY` early in Phase 4 before hardcoding field names.
 
 ## Deferred Items
 
-Items acknowledged and carried forward from previous milestone close:
+Items acknowledged and carried forward from v1.1 milestone close (see `.planning/milestones/v1.1-phases/05-watch-management-write-path/05-REVIEW.md` for full detail):
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| tech-debt | Editing a facility watch drops its `facilityId` override | Deferred | 2026-08-27 (v1.1 close) |
+| tech-debt | Area-watch save has no cap while its preview caps at 10 | Deferred | 2026-08-27 (v1.1 close) |
+| tech-debt | `getWatchesFile()` skips zod validation (violates CLAUDE.md's own rule) | Deferred | 2026-08-27 (v1.1 close) |
+| tech-debt | Rapid chip clicks in area typeahead can silently drop a mutation | Deferred | 2026-08-27 (v1.1 close) |
+| tech-debt | `previewAreas()` resolves areas sequentially, not in parallel | Deferred | 2026-08-27 (v1.1 close) |
+| tech-debt | Auth gate (`proxy.ts`) is an allowlist with no automated route-coverage check | Deferred | 2026-08-27 (v1.1 close) |
+| tech-debt | `requireSession()` copy-pasted across 4 route files | Deferred | 2026-08-27 (v1.1 close) |
 
 ## Session Continuity
 
-Last session: --stopped-at
-Stopped at: Phase 5 UI-SPEC approved
-Resume file: --resume-file
-
-**Planned Phase:** 5 (watch-management-write-path) — 8 plans — 2026-08-26T18:14:10.305Z
+Last session: v1.1 milestone completion
+Stopped at: v1.1 Area Search milestone archived and tagged
+Resume file: .planning/MILESTONES.md
