@@ -1,7 +1,20 @@
 [
   {
+    "id": "upper-pines-labor-day",
+    "parkName": "Upper Pines Campground",
+    "facilityId": 232447,
+    "dateRange": { "start": "2026-09-04", "end": "2026-09-07" },
+    "siteType": "tent"
+  },
+  {
+    "id": "kirk-creek-october",
+    "parkName": "Kirk Creek Campground",
+    "dateRange": { "start": "2026-10-09", "end": "2026-10-11" },
+    "siteType": "any"
+  },
+  {
     "type": "area",
-    "id": "arapaho-uat",
+    "id": "arapaho-roosevelt-pawnee",
     "areas": [
       {
         "name": "Arapaho & Roosevelt National Forests Pawnee NG",
@@ -16,7 +29,7 @@
   },
   {
     "type": "area",
-    "id": "white-river-uat",
+    "id": "white-river-national-forest",
     "areas": [
       {
         "name": "White River National Forest",
