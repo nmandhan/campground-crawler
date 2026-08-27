@@ -13,5 +13,20 @@
       "end": "2026-09-07"
     },
     "siteType": "tent"
+  },
+  {
+    "type": "area",
+    "id": "white-river-uat",
+    "areas": [
+      {
+        "name": "White River National Forest",
+        "recAreaId": 1055
+      }
+    ],
+    "dateRange": {
+      "start": "2026-09-04",
+      "end": "2026-09-07"
+    },
+    "siteType": "tent"
   }
 ]
