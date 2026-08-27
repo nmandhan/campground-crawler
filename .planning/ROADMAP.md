@@ -23,7 +23,7 @@ Full details archived: `.planning/milestones/v1.0-ROADMAP.md`
 **Milestone Goal:** Let the user search a broad geographic area for available campsites instead of pre-identifying one specific campground, and manage watches through the dashboard UI instead of hand-editing `watches.json`.
 
 - [x] **Phase 4: Area-Based Search** - Poller can watch a whole Recreation Area, safely resolving and capping the campgrounds within it
-- [ ] **Phase 5: Watch-Management Write Path** - Dashboard gains a shared-secret-gated UI to create/edit/delete watches, including area lookup by name
+- [x] **Phase 5: Watch-Management Write Path** - Dashboard gains a shared-secret-gated UI to create/edit/delete watches, including area lookup by name (completed 2026-08-27)
 
 ## Phase Details
 
@@ -59,14 +59,14 @@ Plans:
 **Plans**: 8 plans (5 waves)
 
 Plans:
-- [ ] 05-01-PLAN.md — Strict write-path watch schema + GitHub Contents API write module (GET-sha/PUT/409 retry)
-- [ ] 05-02-PLAN.md — Dashboard-side read-only RIDB client (area search, facility classification, capped multi-area preview) + session cookie contract
-- [ ] 05-03-PLAN.md — Next.js 16 `proxy.ts` auth gate + session, watch CRUD, and RIDB proxy Route Handlers
-- [ ] 05-04-PLAN.md — UI vocabulary: COPY keys, design-token CSS classes, inline unlock prompt
-- [ ] 05-05-PLAN.md — Manage Watches section: watch list, lock gate, confirmed delete, toast, page.tsx wiring
-- [ ] 05-06-PLAN.md — Debounced Recreation Area typeahead with chips + auto-refreshing campground preview
-- [ ] 05-07-PLAN.md — Create/edit modal with Facility/Area toggle, wired to POST/PATCH
-- [ ] 05-08-PLAN.md — Production-build auth-gate probe, Vercel secret provisioning, end-to-end verification
+- [x] 05-01-PLAN.md — Strict write-path watch schema + GitHub Contents API write module (GET-sha/PUT/409 retry)
+- [x] 05-02-PLAN.md — Dashboard-side read-only RIDB client (area search, facility classification, capped multi-area preview) + session cookie contract
+- [x] 05-03-PLAN.md — Next.js 16 `proxy.ts` auth gate + session, watch CRUD, and RIDB proxy Route Handlers
+- [x] 05-04-PLAN.md — UI vocabulary: COPY keys, design-token CSS classes, inline unlock prompt
+- [x] 05-05-PLAN.md — Manage Watches section: watch list, lock gate, confirmed delete, toast, page.tsx wiring
+- [x] 05-06-PLAN.md — Debounced Recreation Area typeahead with chips + auto-refreshing campground preview
+- [x] 05-07-PLAN.md — Create/edit modal with Facility/Area toggle, wired to POST/PATCH
+- [x] 05-08-PLAN.md — Production-build auth-gate probe, Vercel secret provisioning, end-to-end verification
 
 **UI hint**: yes
 
@@ -81,5 +81,5 @@ Phases execute in numeric order: 4 → 5
 | 2. Notification Delivery & Deployment | v1.0 | 3/4 | Complete (known gap) | 2026-08-25 |
 | 3. Status Dashboard | v1.0 | 5/5 | Complete | 2026-08-25 |
 | 4. Area-Based Search | v1.1 | 6/6 | Complete | 2026-08-26 |
-| 5. Watch-Management Write Path | v1.1 | 0/8 | Planned | - |
+| 5. Watch-Management Write Path | v1.1 | 8/8 | Complete    | 2026-08-27 |
 </content>

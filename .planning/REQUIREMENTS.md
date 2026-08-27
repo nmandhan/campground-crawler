@@ -17,17 +17,17 @@ Requirements for the Area Search milestone. Each maps to roadmap phases.
 **: Area watches are capped at a maximum combined number of facilities across all selected areas (~15-25) with a truncation indicator, protecting the existing rate-limit budget
 - [x] **AREA-03
 **: Area watch facility resolution filters out non-campground facility types (visitor centers, boat ramps, group day-use areas, etc.) to avoid a wrong-match failure at region scale (the v1.0 "BANDIDO" bug class)
-- [ ] **AREA-04**: User can find a Recreation Area by name (typeahead search) rather than needing to already know its numeric RIDB ID
+- [x] **AREA-04**: User can find a Recreation Area by name (typeahead search) rather than needing to already know its numeric RIDB ID
 - [ ] **AREA-05**: When an area watch matches, the notification/dashboard shows which specific campground(s) within the area(s) matched, not just the area name
 
 ### Watch Management UI
 
-- [ ] **MGMT-01**: User can view a list of all configured watches on the dashboard
-- [ ] **MGMT-02**: User can create a new watch (one or more areas, or a single campground, plus date range and site type) through the dashboard UI, without hand-editing `watches.json`
-- [ ] **MGMT-03**: User can edit an existing watch through the dashboard UI
-- [ ] **MGMT-04**: User can delete a watch through the dashboard UI
-- [ ] **MGMT-05**: Before saving an area watch, the user sees a preview of which actual campgrounds it resolves to across all selected areas, catching bad matches before the watch goes live
-- [ ] **MGMT-06**: Write actions (create/edit/delete) are gated behind a minimal server-side shared-secret check; existing read-only dashboard views remain public and unauthenticated
+- [x] **MGMT-01**: User can view a list of all configured watches on the dashboard
+- [x] **MGMT-02**: User can create a new watch (one or more areas, or a single campground, plus date range and site type) through the dashboard UI, without hand-editing `watches.json`
+- [x] **MGMT-03**: User can edit an existing watch through the dashboard UI
+- [x] **MGMT-04**: User can delete a watch through the dashboard UI
+- [x] **MGMT-05**: Before saving an area watch, the user sees a preview of which actual campgrounds it resolves to across all selected areas, catching bad matches before the watch goes live
+- [x] **MGMT-06**: Write actions (create/edit/delete) are gated behind a minimal server-side shared-secret check; existing read-only dashboard views remain public and unauthenticated
 
 ## v2 Requirements
 
@@ -62,14 +62,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AREA-01 | Phase 4 | Pending |
 | AREA-02 | Phase 4 | Pending |
 | AREA-03 | Phase 4 | Pending |
-| AREA-04 | Phase 5 | Pending |
+| AREA-04 | Phase 5 | Complete |
 | AREA-05 | Phase 4 | Pending |
-| MGMT-01 | Phase 5 | Pending |
-| MGMT-02 | Phase 5 | Pending |
-| MGMT-03 | Phase 5 | Pending |
-| MGMT-04 | Phase 5 | Pending |
-| MGMT-05 | Phase 5 | Pending |
-| MGMT-06 | Phase 5 | Pending |
+| MGMT-01 | Phase 5 | Complete |
+| MGMT-02 | Phase 5 | Complete |
+| MGMT-03 | Phase 5 | Complete |
+| MGMT-04 | Phase 5 | Complete |
+| MGMT-05 | Phase 5 | Complete |
+| MGMT-06 | Phase 5 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 11 total
