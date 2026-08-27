@@ -186,13 +186,61 @@ test('searchRecAreas on a thrown network error returns one safe line, does not t
   }
 });
 
-test('searchRecAreas sends query and limit=10 as query params and an apikey header', async () => {
+test('searchRecAreas sends query and limit=50 as query params and an apikey header', async () => {
   const { fetchImpl, requestedUrls } = makeStubFetch({ searchFixture: losPadresSearchFixture });
   await searchRecAreas('los padres', { fetchImpl, apiKey: 'test-key' });
   assert.equal(requestedUrls.length, 1);
   const url = new URL(requestedUrls[0]!);
   assert.equal(url.searchParams.get('query'), 'los padres');
-  assert.equal(url.searchParams.get('limit'), '10');
+  assert.equal(url.searchParams.get('limit'), '50');
+});
+
+test('searchRecAreas re-ranks results so a name-matching area outranks a non-matching one, regardless of RIDB order', async () => {
+  // Reproduces the live bug: querying "white river" against real RIDB returns a fuzzy
+  // full-text match across 63 results, with "White River National Forest" absent from the
+  // first 10 because RIDB's own ordering is not relevance-sorted by name.
+  const fixture = {
+    RECDATA: [
+      { RecAreaID: 4001, RecAreaName: 'Nestucca Bay National Wildlife Refuge' },
+      { RecAreaID: 13113, RecAreaName: 'Lower White River Wilderness' },
+      { RecAreaID: 1055, RecAreaName: 'White River National Forest' },
+      { RecAreaID: 2001, RecAreaName: 'Payette River' },
+    ],
+  };
+  const { fetchImpl } = makeStubFetch({ searchFixture: fixture });
+  const result = await searchRecAreas('white river national forest', { fetchImpl, apiKey: 'test-key' });
+  assert.ok(result.ok);
+  if (result.ok) {
+    assert.equal(result.areas[0]!.recAreaId, 1055);
+    assert.equal(result.areas[0]!.recAreaName, 'White River National Forest');
+  }
+});
+
+test('searchRecAreas result matching is case-insensitive', async () => {
+  const fixture = {
+    RECDATA: [
+      { RecAreaID: 1, RecAreaName: 'Zzz Unrelated Area' },
+      { RecAreaID: 2, RecAreaName: 'LOS PADRES NATIONAL FOREST' },
+    ],
+  };
+  const { fetchImpl } = makeStubFetch({ searchFixture: fixture });
+  const result = await searchRecAreas('los padres', { fetchImpl, apiKey: 'test-key' });
+  assert.ok(result.ok);
+  if (result.ok) {
+    assert.equal(result.areas[0]!.recAreaId, 2);
+  }
+});
+
+test('searchRecAreas caps returned suggestions at 10 even if RIDB returns more', async () => {
+  const fixture = {
+    RECDATA: Array.from({ length: 30 }, (_, i) => ({ RecAreaID: i, RecAreaName: `Area ${i}` })),
+  };
+  const { fetchImpl } = makeStubFetch({ searchFixture: fixture });
+  const result = await searchRecAreas('area', { fetchImpl, apiKey: 'test-key' });
+  assert.ok(result.ok);
+  if (result.ok) {
+    assert.equal(result.areas.length, 10);
+  }
 });
 
 // ---------------------------------------------------------------------------

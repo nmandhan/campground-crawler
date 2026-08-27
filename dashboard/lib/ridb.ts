@@ -65,12 +65,43 @@ export interface RidbOptions {
 export type SearchResult = { ok: true; areas: RecAreaSuggestion[] } | { ok: false; error: string };
 export type FacilitiesResult = { ok: true; facilities: AreaFacility[] } | { ok: false; error: string };
 
+/** How many raw results to request from RIDB before re-ranking client-side (below).
+ *  RIDB's own `query` search is a fuzzy full-text match across name/description/keywords,
+ *  NOT a relevance-ranked name search — a real Recreation Area whose name contains the
+ *  query can be buried past position 10 behind unrelated results that merely mention the
+ *  query terms in their description (confirmed live: querying "white river" returns 63 total
+ *  matches, with "White River National Forest" absent from the first 10). Fetching a larger
+ *  page and re-ranking client-side (see rankByNameMatch) is the fix — RIDB has no
+ *  relevance/sort query param to ask for this server-side. 50 is RIDB's documented per-page max. */
+const SEARCH_FETCH_LIMIT = 50;
+
+/** Number of ranked suggestions returned to the caller after re-ranking. */
+const SEARCH_RESULT_LIMIT = 10;
+
+/** Client-side re-rank: put results whose RecAreaName actually contains the query
+ *  (case-insensitive) first, in RIDB's original relative order, ahead of everything else.
+ *  This is the fix for RIDB's fuzzy full-text search burying exact name matches — see
+ *  SEARCH_FETCH_LIMIT's comment for the reproduction. A stable sort (Array.prototype.sort
+ *  is stable per spec) preserves RIDB's own ordering within each group. */
+function rankByNameMatch(
+  areas: RecAreaSuggestion[],
+  query: string,
+): RecAreaSuggestion[] {
+  const needle = query.trim().toLowerCase();
+  if (needle === '') return areas;
+  return [...areas].sort((a, b) => {
+    const aMatch = a.recAreaName.toLowerCase().includes(needle) ? 0 : 1;
+    const bMatch = b.recAreaName.toLowerCase().includes(needle) ? 0 : 1;
+    return aMatch - bMatch;
+  });
+}
+
 /** AREA-04: find a Recreation Area by name, no numeric id required from the caller. */
 export async function searchRecAreas(query: string, opts?: RidbOptions): Promise<SearchResult> {
   try {
     const url = new URL(`${RIDB_BASE}/recareas`);
     url.searchParams.set('query', query);
-    url.searchParams.set('limit', '10');
+    url.searchParams.set('limit', String(SEARCH_FETCH_LIMIT));
 
     const doFetch = opts?.fetchImpl ?? fetch;
     const res = await doFetch(url.toString(), {
@@ -87,10 +118,10 @@ export async function searchRecAreas(query: string, opts?: RidbOptions): Promise
       return { ok: false, error: 'unexpected RIDB response shape' };
     }
 
-    return {
-      ok: true,
-      areas: parsed.data.RECDATA.map((r) => ({ recAreaId: r.RecAreaID, recAreaName: r.RecAreaName })),
-    };
+    const areas = parsed.data.RECDATA.map((r) => ({ recAreaId: r.RecAreaID, recAreaName: r.RecAreaName }));
+    const ranked = rankByNameMatch(areas, query);
+
+    return { ok: true, areas: ranked.slice(0, SEARCH_RESULT_LIMIT) };
   } catch (err) {
     // One safe line — never the URL (carries the query) or any header.
     return { ok: false, error: `RIDB /recareas request failed: ${err instanceof Error ? err.message : String(err)}` };
