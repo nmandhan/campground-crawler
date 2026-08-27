@@ -2,7 +2,7 @@
 phase: 05-watch-management-write-path
 plan: 08
 subsystem: dashboard-verification
-status: paused-at-checkpoint-task-3
+status: complete
 tags: [auth-gate, production-build, vercel, verification]
 dependency-graph:
   requires: ["05-07"]
@@ -143,15 +143,106 @@ also record the PAT's expiration date somewhere visible, per the plan's acceptan
 - **Files modified:** `dashboard/scripts/verify-auth-gate.sh`
 - **Commit:** `44b1817`
 
-### Deferred / Not Applicable
+### Task 3: End-to-end verification of the deployed write path (COMPLETE — user approved)
 
-None — no out-of-scope issues encountered.
+The user worked through the live UAT checklist against https://dashboard-drab-seven-94.vercel.app
+and reported "approved." Along the way, this task surfaced and fixed four real bugs that no
+unit test or prior automated check had caught — exactly the class of issue Task 3 exists to find:
+
+**1. [Bug] RIDB area search was not relevance-ranked, burying real name matches**
+- **Found during:** User's typeahead test — searching "White River National Forest" (a real,
+  well-known National Forest) returned no results.
+- **Root cause:** RIDB's `/recareas?query=` endpoint does fuzzy full-text matching across
+  name/description/keywords, not a relevance-ranked name search. Querying "white river" returns
+  63 total matches; the actual "White River National Forest" (RecAreaID 1055) never appeared in
+  the original `limit=10` window because RIDB's own ordering isn't sorted by name relevance.
+- **Fix:** `dashboard/lib/ridb.ts`'s `searchRecAreas()` now fetches `SEARCH_FETCH_LIMIT=50` results
+  and client-side re-ranks (stable sort) so any result whose `RecAreaName` contains the query
+  (case-insensitive) surfaces first, before trimming to `SEARCH_RESULT_LIMIT=10` for display.
+  Added 3 new tests reproducing the live bug and covering case-insensitivity and the result cap.
+- **Files:** `dashboard/lib/ridb.ts`, `dashboard/lib/ridb.test.ts`
+- **Commit:** `09efc3a`
+- **Verified:** live against real RIDB data (confirmed "White River National Forest" now ranks
+  4th for query "white river"), 159/159 dashboard tests pass, clean typecheck/build, redeployed,
+  user confirmed the fix worked in their browser.
+
+**2. [Bug] `DASHBOARD_PASSPHRASE` was stored with a trailing newline, would have locked the user out**
+- **Found during:** orchestrator retrieving the passphrase via `vercel env pull` to hand to the
+  user for login (the user asked "what is the passphrase" since it was generated but never
+  echoed, per instruction).
+- **Root cause:** the value was piped into `vercel env add` via `echo "$VAR"`, which appends a
+  trailing newline that got stored as part of the secret. A value typed into the browser's
+  unlock form would never include that newline, so the exact-string comparison in
+  `hasValidSession()` would always fail — the user would have been locked out of their own
+  write path with a correctly-provisioned-looking secret.
+- **Fix:** Removed the old value (`vercel env rm`, approved explicitly by the user after the
+  orchestrator's session was blocked by the permission classifier) and re-added it via
+  `printf '%s'` (no trailing newline), verified clean via `vercel env pull`, redeployed.
+- **No code change** — this was purely a provisioning-step error, not a bug in `session.ts` or
+  the plan's own scripts.
+
+**3. [Critical process gap] Phase 4 and Phase 5 had never been pushed to GitHub**
+- **Found during:** orchestrator manually triggering the poll workflow to verify it, ahead of
+  waiting on GitHub's unreliable cron cadence — the run failed with
+  `fatal: watches config at watches.json is invalid: 0.parkName: Invalid input: expected string,
+  received undefined`.
+- **Root cause:** all of Phase 4 and Phase 5's execution happened in the local git repo only;
+  nothing had been pushed to `origin/main` since a commit that predates Phase 4's area-watch
+  schema work. `vercel --prod` deploys directly from local files (not from git), which is why
+  the *dashboard* had the new code while GitHub Actions — which checks out `origin/main` — was
+  still running the old, pre-area-watch `src/config/schema.ts` with no `AreaWatchSchema` at all.
+  Meanwhile `origin/main` had moved forward independently: 48 commits of the poller's own
+  routine `runs.json`/`state.json` history, plus 4 real dashboard-authored `watches.json` commits
+  from the user's own UAT session (2 deletes of real watches, 2 adds of test area watches).
+- **Fix:** Confirmed the two histories touched disjoint files (local: all source/docs; origin:
+  only `runs.json`/`watches.json`) — merged cleanly with zero conflicts (twice, since origin
+  advanced again mid-merge from an in-flight poller run), then pushed. Re-triggered the poll
+  workflow, which then succeeded, correctly parsing and resolving both area watches
+  (`arapaho-uat` → 28 campgrounds capped to 20, `white-river-uat` → 33 campgrounds capped to 20).
+- **Process fix going forward:** push to `origin/main` after each phase's execution completes,
+  not just commit locally — this should have happened automatically as part of wave completion
+  and was missed.
+
+**4. [Data loss, recovered] Two real production watches were deleted during delete-flow testing**
+- **Found during:** checking `watches.json`'s live content on GitHub (via `gh api`) while
+  investigating the poll failure above.
+- **Root cause:** the user's own delete-flow testing (Task 3 step F) deleted
+  `upper-pines-labor-day` and `kirk-creek-october` — the two real watches from v1.0 — rather
+  than a dedicated disposable test watch, leaving only two UAT test area watches
+  (`arapaho-uat`, `white-river-uat`) live.
+- **Fix:** Restored the original two facility watches from their last-known-good commit
+  (`06c8efa`). Per the user's explicit choice, kept the two area watches rather than removing
+  them (renamed `arapaho-uat` → `arapaho-roosevelt-pawnee`, `white-river-uat` →
+  `white-river-national-forest`, dropping the `-uat` suffix since they're now real ongoing
+  watches, not test artifacts). Validated the merged 4-watch file against
+  `src/config/schema.ts`'s `WatchesFileSchema` before committing — passed. Pushed. Triggered one
+  final poll run: all 4 watches (2 facility, 2 area) resolved and checked successfully with zero
+  failures.
+- **Commit:** `6a43786`
+
+### User sign-off
+
+User replied "approved" after working through the live checklist (unlock, typeahead — initially
+failed, fixed and re-confirmed working — area preview, save, and the subsequent investigation
+above). Steps D/E (validation conflict handling, edit) and the remainder of step F (delete
+confirmation dialog copy) were not separately narrated back by the user, but the live production
+system is now in a fully verified, healthy end state: real watches restored, test watches
+retained as real ones by choice, poller successfully resolving all of them, dashboard fix
+deployed and confirmed.
 
 ## Self-Check
 
 - `dashboard/scripts/verify-auth-gate.sh` exists, is executable, and exits 0 with
-  `all auth-gate checks passed` and zero `FAIL` lines — confirmed by direct execution above.
-- Commit `44b1817` exists in `git log`.
+  `all auth-gate checks passed` and zero `FAIL` lines — confirmed by direct execution.
+- All three Vercel Production secrets confirmed present via `vercel env ls`, none `NEXT_PUBLIC_`.
+- Live probes against https://dashboard-drab-seven-94.vercel.app confirm `/` → 200 and all
+  mutation/RIDB endpoints → 401 without a session.
+- `git log --oneline main | grep "via dashboard"` shows 4 commits (2 add, 2 delete) — confirms
+  the write path really does commit through the GitHub Contents API end-to-end.
+- Final poll run (`33032737377`) succeeded, checked all 4 current watches, 0 failures.
+- `watches.json` on `main` contains only area criteria for both area watches (`{name, recAreaId}`)
+  — no frozen facility list — confirming Anti-Pattern 1 from ARCHITECTURE.md was correctly
+  avoided.
 
 ## Known Stubs
 
@@ -159,7 +250,13 @@ None.
 
 ## Threat Flags
 
-None — this plan only added a verification script; no new production surface was introduced.
+- T-05-33 (over-scoped GitHub PAT) mitigated as specified — user created a fine-grained,
+  single-repo-scoped token.
+- New, not previously flagged: **secrets transmitted in plaintext through the chat channel**
+  (the GitHub PAT and RIDB API key were pasted directly into the conversation so the orchestrator
+  could provision them). User was advised to rotate the GitHub PAT as a hygiene measure. Not a
+  code/architecture issue — a one-time operational exposure from this session's provisioning
+  approach.
 
 ## TDD Gate Compliance
 
