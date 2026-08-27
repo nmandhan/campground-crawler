@@ -1,5 +1,33 @@
 # Milestones
 
+## v1.1 Area Search (Shipped: 2026-08-27)
+
+**Phases completed:** 2 phases (Phase 4: Area-Based Search, Phase 5: Watch-Management Write Path), 14 plans, 32 tasks
+**Timeline:** 2026-08-25 → 2026-08-27 (2 days)
+**Git range:** `b480f23` (feat(04-01)) → `c406ad8` (docs(phase-5)) — 147 commits, 100 files changed, +14,341/-232 lines
+**Requirements:** 11/11 v1.1 requirements delivered (AREA-01..05, MGMT-01..06)
+
+**Key accomplishments:**
+
+- Area-based watches — a single watch can now target one or more named Recreation Areas (park/forest), resolved to real campgrounds at poll time via RIDB's RecArea entity, instead of requiring one pre-identified campground per watch.
+- Per-campground match attribution and group-vs-standard campground tagging — a matched area watch names the exact campground that opened (with a `[GROUP]` tag where relevant), not just the area name, avoiding the v1.0-class "wrong match" failure at region scale.
+- A shared 20-facility cap across all areas in a watch, with truncation surfaced in both match output and run history, protecting the RIDB rate budget as area watches scale.
+- Full dashboard write path — create, edit, and delete watches through the UI without hand-editing `watches.json`, gated behind a shared-secret session cookie while existing read-only views stay public and unauthenticated.
+- Recreation Area typeahead (debounced, name-based search) with a live, auto-refreshing preview of which actual campgrounds an area watch resolves to before it's saved.
+- Full end-to-end live verification against production: real watches created/edited/deleted through the deployed dashboard, landing as real commits via a dedicated GitHub PAT, with the poller successfully resolving and checking them on real GitHub Actions infrastructure. Live testing caught and fixed a Next.js 16 auth-gate landmine (`middleware.ts`→`proxy.ts` silent rename trap), a RIDB search-ranking bug, a passphrase-provisioning bug, and a critical process gap (two phases' work had never been pushed to GitHub).
+
+### Known Tech Debt (non-blocking, see `05-REVIEW.md`)
+
+- Editing a facility watch through the dashboard silently drops its `facilityId` override (no user-visible signal)
+- An area watch can be saved with more Recreation Areas than its own live preview ever validates (cap mismatch between typeahead/preview/save schema)
+- `getWatchesFile()` doesn't validate fetched `watches.json` with zod, unlike every other API-response path in this phase
+- Rapid double-clicks in the area typeahead can silently drop a chip add/remove (React state race)
+- `previewAreas()` resolves areas sequentially instead of in parallel (latency, not correctness)
+- The auth gate (`proxy.ts`) is an inclusion allowlist with no automated check tying new routes to protection
+- `requireSession()` is copy-pasted into four route files instead of being a shared export
+
+---
+
 ## v1.0 MVP (Shipped: 2026-08-25)
 
 **Phases completed:** 3 phases, 13 plans, 31 tasks
