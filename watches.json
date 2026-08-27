@@ -1,14 +1,5 @@
 [
   {
-    "id": "kirk-creek-october",
-    "parkName": "Kirk Creek Campground",
-    "dateRange": {
-      "start": "2026-10-09",
-      "end": "2026-10-11"
-    },
-    "siteType": "any"
-  },
-  {
     "type": "area",
     "id": "arapaho-uat",
     "areas": [
