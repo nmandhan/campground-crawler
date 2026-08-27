@@ -39,10 +39,13 @@ Validated in Phase 4 (Area-Based Search), live-verified against Recreation.gov R
 
 - [x] User can search a general area/region for available campsites, not just one pre-identified campground — `type: "area"` watches resolve via RIDB's RecArea entity, filtered to reservable campgrounds (visitor centers/boat ramps/day-use excluded), capped at 20 shared facilities per watch, aggregated into one outcome per watch with per-campground attribution in match output; live-verified end-to-end (`resolveArea`/`listAreaFacilities` against real Sequoia/Sierra National Forest data, correct truncation, correct dedup/aggregation)
 
+Validated in Phase 5 (Watch-Management Write Path), live-verified against the deployed Vercel dashboard and real GitHub repo:
+
+- [x] User can create/edit/delete watches through the dashboard UI, including searching for a Recreation Area by name (typeahead) and previewing which campgrounds an area watch resolves to before saving, without hand-editing `watches.json` — write actions gated behind a shared-secret session cookie (inline unlock prompt), reads stay public; live-verified end-to-end (real watches created/deleted via the dashboard landing as commits authored by a dedicated GitHub PAT, the poller successfully resolving and checking the resulting area watches on real GitHub Actions infrastructure)
+
 ### Active
 
 - [ ] User receives an email when a watch finds a newly available matching site (Phase 2 — blocked on Resend domain verification; user declined to buy a domain, dashboard added as a near-term substitute)
-- [ ] User can create/edit/delete watches through the dashboard UI, including picking an area and dates (v1.1)
 
 ### Out of Scope
 
@@ -57,6 +60,8 @@ Validated in Phase 4 (Area-Based Search), live-verified against Recreation.gov R
 - User wants to track federal campgrounds (National Parks, Forests, etc.).
 - **Shipped as of v1.0 (2026-08-25):** ~2,189 LOC TypeScript across two independent projects in one repo — `src/` (Node 22/tsx poller, no build step, deployment-agnostic `run()` core) and `dashboard/` (Next.js 16 App Router, deployed to Vercel). The poller runs on a GitHub Actions 5-minute cron against a public repo, committing dedup state (`state.json`) and a capped run-history log (`runs.json`) back to `main` every cycle. The dashboard reads those files at request time from raw.githubusercontent.com and is live at https://dashboard-drab-seven-94.vercel.app.
 - **Known tech debt (see `.planning/milestones/v1.0-phases/03-status-dashboard/03-REVIEW.md`):** a dormant edge case where a watch id containing `:` would silently drop from the dashboard; a mixed-precision ISO-timestamp comparison that could pick the wrong "latest run" on a rare collision; the poller's real crash-error message doesn't reach the committed run history (a generic placeholder is used instead); some validation/formatting logic is duplicated between `src/` and `dashboard/` (two independent npm projects by design, per D-04) with no shared-source mechanism to keep them in sync.
+- **Known tech debt from Phase 5 (see `.planning/phases/05-watch-management-write-path/05-REVIEW.md`):** editing a facility watch through the dashboard silently drops its `facilityId` override (no user-visible signal); an area watch can be saved with more Recreation Areas than its own live preview validates (typeahead has no cap, preview caps at 10, save schema has no cap); `getWatchesFile()` in `dashboard/lib/github-write.ts` doesn't validate the fetched `watches.json` with zod, unlike every other API-response path; rapid double-clicks in the area typeahead can silently drop a chip add/remove; `previewAreas()` resolves areas sequentially instead of in parallel; the auth gate (`dashboard/proxy.ts`) is an inclusion allowlist with no automated check tying new routes to protection; `requireSession()` is copy-pasted into four route files instead of being a shared export.
+- **Process incident (Phase 5, 2026-08-27):** Phase 4 and Phase 5's entire execution history existed only in a local git clone and was never pushed to `origin/main` — discovered only when a manually-triggered poll run crashed on GitHub's still-pre-Phase-4 code. The dashboard appeared to work throughout because `vercel --prod` deploys directly from local files, bypassing git entirely, masking the gap. Resolved by merging (cleanly — the two histories had touched disjoint files) and pushing. **Going forward: push to `origin/main` after each phase's execution completes, not just commit locally.**
 
 ## Constraints
 
@@ -93,4 +98,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-26 — Phase 4 (Area-Based Search) complete*
+*Last updated: 2026-08-27 — Phase 5 (Watch-Management Write Path) complete — v1.1 Area Search milestone fully delivered*
