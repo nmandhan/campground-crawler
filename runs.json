@@ -1,26 +1,5 @@
 [
   {
-    "startedAt": "2026-08-25T12:01:07.240Z",
-    "finishedAt": "2026-08-25T12:01:07.710Z",
-    "checked": 2,
-    "outcomes": [
-      {
-        "watchId": "upper-pines-labor-day",
-        "status": "NO_MATCH"
-      },
-      {
-        "watchId": "kirk-creek-october",
-        "status": "NO_MATCH"
-      }
-    ],
-    "newMatches": [],
-    "failed": [],
-    "noMatch": [
-      "upper-pines-labor-day",
-      "kirk-creek-october"
-    ]
-  },
-  {
     "startedAt": "2026-08-25T12:52:57.487Z",
     "finishedAt": "2026-08-25T12:52:58.246Z",
     "checked": 2,
@@ -1047,5 +1026,34 @@
       }
     ],
     "noMatch": []
+  },
+  {
+    "startedAt": "2026-08-27T02:14:16.111Z",
+    "finishedAt": "2026-08-27T02:14:21.476Z",
+    "checked": 2,
+    "outcomes": [
+      {
+        "watchId": "arapaho-uat",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 28,
+          "kept": 20
+        }
+      },
+      {
+        "watchId": "white-river-uat",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 33,
+          "kept": 20
+        }
+      }
+    ],
+    "newMatches": [],
+    "failed": [],
+    "noMatch": [
+      "arapaho-uat",
+      "white-river-uat"
+    ]
   }
 ]
