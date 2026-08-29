@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-08-29T22:42:52.678Z",
+  "phase": "6",
+  "phase_name": "Tech Debt & Route-Coverage Hardening",
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "ready_to_discuss_or_plan",
+  "completed_tasks": [],
+  "remaining_tasks": [],
+  "blockers": [
+    {
+      "description": "Email delivery (NOTF-01/02/03) still blocked on Resend domain verification. Deferred again for v1.2 by explicit user choice — not scheduled for this milestone.",
+      "type": "external",
+      "workaround": "No action needed unless the user changes their mind. Not part of v1.2 scope."
+    },
+    {
+      "description": "RIDB's exact rate limit and coordinate field shape (GEOJSON vs FacilityLatitude/Longitude) are MEDIUM-confidence, unverified against live data.",
+      "type": "technical",
+      "workaround": "Flagged for confirmation during Phase 7 (RIDB Discovery Data Layer) implementation, before finalizing the request-budget guard and coordinate-validation thresholds."
+    }
+  ],
+  "human_actions_pending": [],
+  "decisions": [
+    {"decision": "Map library: MapLibre GL (raw maplibre-gl, no react-map-gl wrapper) over Leaflet", "rationale": "GPU-rendered vector tiles fit the milestone's explicit 'genuinely polished' bar better; built-in clustering avoids a second dependency", "phase": "9"},
+    {"decision": "Discovery page gated behind the existing shared-secret session (DISC-04)", "rationale": "Consistent with the write-path auth boundary; protects the shared RIDB rate budget from anonymous traffic", "phase": "8"},
+    {"decision": "Phase order: Tech debt (6) -> RIDB data layer (7) -> Discovery UI (8) -> Map (9) -> Redesign (10)", "rationale": "Tech debt first so the new auth-gate route-coverage check protects Phases 7-9's new routes from day one; data layer validates RIDB assumptions before UI depends on them; redesign last so new screens are styled once", "phase": "roadmap"},
+    {"decision": "Reversed v1.1's 'unbounded whole-catalog discovery' exclusion", "rationale": "Original rate-limit concern was about eager/unbounded querying, not full-catalog search itself; DISC-02 mandates on-demand/paginated availability fetching as the mitigation", "phase": "8"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Run /gsd-discuss-phase 6 (or /gsd-plan-phase 6 to skip discussion) to start Phase 6: Tech Debt & Route-Coverage Hardening.",
+  "context_notes": "v1.2 Discovery & Polish milestone was just initialized in this session: research (4 parallel angles + synthesis), requirements (18 REQ-IDs across DISC/MAP/UI/TECH categories), and roadmap (5 phases, 6-10) are all done and committed/pushed. No phase work has started yet. The user's original ask was a much bigger vision (full Recreation.gov parity, reviews, hiking trails) — reviews and trails were deliberately scoped OUT of v1.2 to backlog (REVIEW-01, TRAIL-01 in REQUIREMENTS.md v2 section) pending research spikes into data sourcing, since no official API exists for either. Email delivery (NOTF-01/02/03) was also explicitly deferred again by the user's own choice mid-scoping, despite being in the original 'what's next' answer — do not assume it's still in scope."
+}
