@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Area Search
-status: completed
-stopped_at: v1.1 Area Search milestone archived and tagged
+milestone: v1.2
+milestone_name: Discovery & Polish
+status: in_progress
+stopped_at: Milestone v1.2 started, defining requirements
 last_updated: "2026-08-27T02:39:18.754Z"
 last_activity: 2026-08-27
 progress:
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-27)
 
 ## Current Position
 
-Phase: none (v1.1 complete)
-Plan: none
-Status: Milestone complete
-Last activity: 2026-08-27
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-08-27 — Milestone v1.2 started
 
 Carried-forward context (see PROJECT.md Context/Constraints and MILESTONES.md Known Gaps for detail):
 

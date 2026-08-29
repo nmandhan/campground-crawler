@@ -8,14 +8,18 @@ A single-user campsite availability watcher for Recreation.gov. It periodically 
 
 When a watched campsite becomes available on Recreation.gov, the user gets an email fast enough to actually book it before someone else does. (Currently delivered via a status dashboard the user checks manually, until email is unblocked — see Active Requirements.)
 
-## Current Milestone: v1.1 Area Search
+## Current Milestone: v1.2 Discovery & Polish
 
-**Goal:** Let the user search a broad geographic area for available campsites, instead of having to pre-identify one specific campground, and manage watches through the dashboard UI instead of hand-editing `watches.json`.
+**Goal:** Turn the dashboard from a watch-management tool into a genuinely polished, one-stop-shop for discovering and watching campsites — searchable/browsable beyond the user's configured watches, with a map view — while also unblocking real email delivery and paying down Phase 5's known tech debt.
 
 **Target features:**
-- Area/region-based campground search — query multiple campgrounds within a region via RIDB, not one pinned facility ID
-- Web UI on the dashboard to create/edit/delete watches (area, dates, site type)
-- Existing polling/matching/dedup/email pipeline extended to handle area-based watches (multiple campgrounds per watch)
+- Standalone discovery page — search/browse RIDB's full catalog by name/area/state, see availability at a glance, "Watch this" action to create a watch from a result
+- Map view showing search results and active watches spatially (layered onto the discovery page) — must handle RIDB's inconsistently-populated lat/long data gracefully
+- Visual redesign — a real design pass for a polished, beautiful UI, not just functional screens
+- Unblock email delivery — revisit the Resend domain-verification blocker (NOTF-01/02/03)
+- Fix Phase 5 tech debt — the 7 items logged below
+
+**Deferred to backlog (not this milestone):** campsite reviews (no official API; would require a scraping exception to the existing official-API-only constraint) and nearby hiking trails (needs a trails data source, RIDB's coverage is incomplete) — both need a research spike before committing to a future milestone.
 
 ## Requirements
 
@@ -45,7 +49,11 @@ Validated in Phase 5 (Watch-Management Write Path), live-verified against the de
 
 ### Active
 
-- [ ] User receives an email when a watch finds a newly available matching site (Phase 2 — blocked on Resend domain verification; user declined to buy a domain, dashboard added as a near-term substitute)
+- [ ] User receives an email when a watch finds a newly available matching site (Phase 2 — blocked on Resend domain verification; user declined to buy a domain, dashboard added as a near-term substitute) (v1.2)
+- [ ] User can search/browse the full RIDB catalog (not just configured watches) from a standalone discovery page, with availability shown at a glance and a "Watch this" action (v1.2)
+- [ ] User can see a map of search results and active watches (v1.2)
+- [ ] Dashboard has a genuinely polished, beautiful visual design (v1.2)
+- [ ] Phase 5 tech debt resolved: facilityId preserved on facility-watch edit, area-watch cap consistency, zod validation on `getWatchesFile()`, typeahead chip-mutation race fixed, `previewAreas()` parallelized, auth-gate route coverage check, `requireSession()` deduplicated (v1.2)
 
 ### Out of Scope
 
@@ -53,6 +61,8 @@ Validated in Phase 5 (Watch-Management Write Path), live-verified against the de
 - Automated booking/reservation of the campsite — out of scope, notification only (booking sites generally prohibit bots completing checkout, and this reduces liability/complexity)
 - SMS/push notifications — email only for v1
 - Support for booking sites other than Recreation.gov — ReserveCalifornia and others deferred
+- Campsite reviews aggregated from the internet — no official API exists; sourcing from third-party sites would require scraping, which conflicts with the existing official-API-only data-source constraint. Deferred pending a research spike into whether a legitimate reviews API exists.
+- Nearby hiking trails — RIDB's trail-related activity data is incomplete; needs a research spike into a dedicated trails data source before this becomes a committed requirement.
 
 ## Context
 
@@ -60,7 +70,7 @@ Validated in Phase 5 (Watch-Management Write Path), live-verified against the de
 - User wants to track federal campgrounds (National Parks, Forests, etc.).
 - **Shipped as of v1.0 (2026-08-25):** ~2,189 LOC TypeScript across two independent projects in one repo — `src/` (Node 22/tsx poller, no build step, deployment-agnostic `run()` core) and `dashboard/` (Next.js 16 App Router, deployed to Vercel). The poller runs on a GitHub Actions 5-minute cron against a public repo, committing dedup state (`state.json`) and a capped run-history log (`runs.json`) back to `main` every cycle. The dashboard reads those files at request time from raw.githubusercontent.com and is live at https://dashboard-drab-seven-94.vercel.app.
 - **Known tech debt (see `.planning/milestones/v1.0-phases/03-status-dashboard/03-REVIEW.md`):** a dormant edge case where a watch id containing `:` would silently drop from the dashboard; a mixed-precision ISO-timestamp comparison that could pick the wrong "latest run" on a rare collision; the poller's real crash-error message doesn't reach the committed run history (a generic placeholder is used instead); some validation/formatting logic is duplicated between `src/` and `dashboard/` (two independent npm projects by design, per D-04) with no shared-source mechanism to keep them in sync.
-- **Known tech debt from Phase 5 (see `.planning/phases/05-watch-management-write-path/05-REVIEW.md`):** editing a facility watch through the dashboard silently drops its `facilityId` override (no user-visible signal); an area watch can be saved with more Recreation Areas than its own live preview validates (typeahead has no cap, preview caps at 10, save schema has no cap); `getWatchesFile()` in `dashboard/lib/github-write.ts` doesn't validate the fetched `watches.json` with zod, unlike every other API-response path; rapid double-clicks in the area typeahead can silently drop a chip add/remove; `previewAreas()` resolves areas sequentially instead of in parallel; the auth gate (`dashboard/proxy.ts`) is an inclusion allowlist with no automated check tying new routes to protection; `requireSession()` is copy-pasted into four route files instead of being a shared export.
+- **Known tech debt from Phase 5 (see `.planning/milestones/v1.1-phases/05-watch-management-write-path/05-REVIEW.md`, targeted for resolution in v1.2):** editing a facility watch through the dashboard silently drops its `facilityId` override (no user-visible signal); an area watch can be saved with more Recreation Areas than its own live preview validates (typeahead has no cap, preview caps at 10, save schema has no cap); `getWatchesFile()` in `dashboard/lib/github-write.ts` doesn't validate the fetched `watches.json` with zod, unlike every other API-response path; rapid double-clicks in the area typeahead can silently drop a chip add/remove; `previewAreas()` resolves areas sequentially instead of in parallel; the auth gate (`dashboard/proxy.ts`) is an inclusion allowlist with no automated check tying new routes to protection; `requireSession()` is copy-pasted into four route files instead of being a shared export.
 - **Process incident (Phase 5, 2026-08-27):** Phase 4 and Phase 5's entire execution history existed only in a local git clone and was never pushed to `origin/main` — discovered only when a manually-triggered poll run crashed on GitHub's still-pre-Phase-4 code. The dashboard appeared to work throughout because `vercel --prod` deploys directly from local files, bypassing git entirely, masking the gap. Resolved by merging (cleanly — the two histories had touched disjoint files) and pushing. **Going forward: push to `origin/main` after each phase's execution completes, not just commit locally.**
 
 ## Constraints
@@ -98,4 +108,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-27 — Phase 5 (Watch-Management Write Path) complete — v1.1 Area Search milestone fully delivered*
+*Last updated: 2026-08-27 — v1.2 Discovery & Polish milestone started*
