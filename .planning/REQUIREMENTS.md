@@ -71,30 +71,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DISC-01 | TBD | Pending |
-| DISC-02 | TBD | Pending |
-| DISC-03 | TBD | Pending |
-| DISC-04 | TBD | Pending |
-| MAP-01 | TBD | Pending |
-| MAP-02 | TBD | Pending |
-| MAP-03 | TBD | Pending |
-| MAP-04 | TBD | Pending |
-| UI-01 | TBD | Pending |
-| UI-02 | TBD | Pending |
-| UI-03 | TBD | Pending |
-| TECH-01 | TBD | Pending |
-| TECH-02 | TBD | Pending |
-| TECH-03 | TBD | Pending |
-| TECH-04 | TBD | Pending |
-| TECH-05 | TBD | Pending |
-| TECH-06 | TBD | Pending |
-| TECH-07 | TBD | Pending |
+| DISC-01 | Phase 8 | Pending |
+| DISC-02 | Phase 7 | Pending |
+| DISC-03 | Phase 8 | Pending |
+| DISC-04 | Phase 8 | Pending |
+| MAP-01 | Phase 9 | Pending |
+| MAP-02 | Phase 9 | Pending |
+| MAP-03 | Phase 9 | Pending |
+| MAP-04 | Phase 9 | Pending |
+| UI-01 | Phase 10 | Pending |
+| UI-02 | Phase 10 | Pending |
+| UI-03 | Phase 8 | Pending |
+| TECH-01 | Phase 6 | Pending |
+| TECH-02 | Phase 6 | Pending |
+| TECH-03 | Phase 6 | Pending |
+| TECH-04 | Phase 6 | Pending |
+| TECH-05 | Phase 6 | Pending |
+| TECH-06 | Phase 6 | Pending |
+| TECH-07 | Phase 6 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 18 total
-- Mapped to phases: 0 (roadmap not yet created)
-- Unmapped: 18
+- Mapped to phases: 18 (Phase 6: TECH-01..07, Phase 7: DISC-02, Phase 8: DISC-01/03/04 + UI-03, Phase 9: MAP-01..04, Phase 10: UI-01/02)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-08-29*
-*Last updated: 2026-08-29 after v1.2 requirements gathering*
+*Last updated: 2026-08-29 after v1.2 roadmap creation (Phases 6-10)*
