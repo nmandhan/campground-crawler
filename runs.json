@@ -1,26 +1,5 @@
 [
   {
-    "startedAt": "2026-08-25T16:27:57.542Z",
-    "finishedAt": "2026-08-25T16:27:57.916Z",
-    "checked": 2,
-    "outcomes": [
-      {
-        "watchId": "upper-pines-labor-day",
-        "status": "NO_MATCH"
-      },
-      {
-        "watchId": "kirk-creek-october",
-        "status": "NO_MATCH"
-      }
-    ],
-    "newMatches": [],
-    "failed": [],
-    "noMatch": [
-      "upper-pines-labor-day",
-      "kirk-creek-october"
-    ]
-  },
-  {
     "startedAt": "2026-08-25T17:04:41.156Z",
     "finishedAt": "2026-08-25T17:04:42.413Z",
     "checked": 2,
@@ -1133,6 +1112,35 @@
     "failed": [],
     "noMatch": [
       "arapaho-roosevelt-pawnee"
+    ]
+  },
+  {
+    "startedAt": "2026-08-29T00:43:04.022Z",
+    "finishedAt": "2026-08-29T00:43:16.249Z",
+    "checked": 2,
+    "outcomes": [
+      {
+        "watchId": "arapaho-roosevelt-pawnee",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 28,
+          "kept": 20
+        }
+      },
+      {
+        "watchId": "white-river-national-forest",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 33,
+          "kept": 20
+        }
+      }
+    ],
+    "newMatches": [],
+    "failed": [],
+    "noMatch": [
+      "arapaho-roosevelt-pawnee",
+      "white-river-national-forest"
     ]
   }
 ]
