@@ -1,26 +1,5 @@
 [
   {
-    "startedAt": "2026-08-26T08:21:55.476Z",
-    "finishedAt": "2026-08-26T08:21:56.052Z",
-    "checked": 2,
-    "outcomes": [
-      {
-        "watchId": "upper-pines-labor-day",
-        "status": "NO_MATCH"
-      },
-      {
-        "watchId": "kirk-creek-october",
-        "status": "NO_MATCH"
-      }
-    ],
-    "newMatches": [],
-    "failed": [],
-    "noMatch": [
-      "upper-pines-labor-day",
-      "kirk-creek-october"
-    ]
-  },
-  {
     "startedAt": "2026-08-26T09:06:28.917Z",
     "finishedAt": "2026-08-26T09:06:29.771Z",
     "checked": 2,
@@ -1369,6 +1348,50 @@
   {
     "startedAt": "2026-09-02T05:42:35.933Z",
     "finishedAt": "2026-09-02T05:42:43.142Z",
+    "checked": 2,
+    "outcomes": [
+      {
+        "watchId": "arapaho-roosevelt-pawnee",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 28,
+          "kept": 20
+        }
+      },
+      {
+        "watchId": "white-river-national-forest",
+        "status": "MATCH",
+        "newMatches": [],
+        "suppressed": [
+          {
+            "watchId": "white-river-national-forest",
+            "campsiteId": "90833",
+            "siteLabel": "013",
+            "loop": "SHEPHERDS RIM CAMPGROUND",
+            "siteType": "tent",
+            "facilityId": 234795,
+            "facilityName": "SHEPHERDS RIM CAMPGROUND",
+            "facilityType": "standard",
+            "startDate": "2026-09-04",
+            "endDate": "2026-09-07",
+            "bookingUrl": "https://www.recreation.gov/camping/campsites/90833"
+          }
+        ],
+        "truncated": {
+          "requested": 33,
+          "kept": 20
+        }
+      }
+    ],
+    "newMatches": [],
+    "failed": [],
+    "noMatch": [
+      "arapaho-roosevelt-pawnee"
+    ]
+  },
+  {
+    "startedAt": "2026-09-02T09:54:09.277Z",
+    "finishedAt": "2026-09-02T09:54:14.398Z",
     "checked": 2,
     "outcomes": [
       {
