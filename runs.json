@@ -1,26 +1,5 @@
 [
   {
-    "startedAt": "2026-08-26T10:54:43.361Z",
-    "finishedAt": "2026-08-26T10:54:43.776Z",
-    "checked": 2,
-    "outcomes": [
-      {
-        "watchId": "upper-pines-labor-day",
-        "status": "NO_MATCH"
-      },
-      {
-        "watchId": "kirk-creek-october",
-        "status": "NO_MATCH"
-      }
-    ],
-    "newMatches": [],
-    "failed": [],
-    "noMatch": [
-      "upper-pines-labor-day",
-      "kirk-creek-october"
-    ]
-  },
-  {
     "startedAt": "2026-08-26T11:17:10.051Z",
     "finishedAt": "2026-08-26T11:17:10.838Z",
     "checked": 2,
@@ -1455,6 +1434,42 @@
           "requested": 28,
           "kept": 20
         }
+      },
+      {
+        "watchId": "white-river-national-forest",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 33,
+          "kept": 20
+        }
+      }
+    ],
+    "newMatches": [],
+    "failed": [],
+    "noMatch": [
+      "arapaho-roosevelt-pawnee",
+      "white-river-national-forest"
+    ]
+  },
+  {
+    "startedAt": "2026-09-02T22:04:04.157Z",
+    "finishedAt": "2026-09-02T22:04:18.734Z",
+    "checked": 2,
+    "outcomes": [
+      {
+        "watchId": "arapaho-roosevelt-pawnee",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 28,
+          "kept": 20
+        },
+        "facilityFailures": [
+          {
+            "facilityId": 10386586,
+            "facilityName": "Rainbow Lakes Campground",
+            "reason": "HTTP 429 from https://www.recreation.gov/api/camps/availability/campground/10386586/month?start_date=2026-09-01T00%3A00%3A00.000Z"
+          }
+        ]
       },
       {
         "watchId": "white-river-national-forest",
