@@ -1,63 +1,5 @@
 [
   {
-    "startedAt": "2026-08-28T16:48:08.844Z",
-    "finishedAt": "2026-08-28T16:48:16.742Z",
-    "checked": 2,
-    "outcomes": [
-      {
-        "watchId": "arapaho-roosevelt-pawnee",
-        "status": "NO_MATCH",
-        "truncated": {
-          "requested": 28,
-          "kept": 20
-        }
-      },
-      {
-        "watchId": "white-river-national-forest",
-        "status": "MATCH",
-        "newMatches": [
-          {
-            "watchId": "white-river-national-forest",
-            "campsiteId": "93152",
-            "siteLabel": "24",
-            "loop": "GORE CREEK CAMPGROUND",
-            "siteType": "tent",
-            "facilityId": 234794,
-            "facilityName": "GORE CREEK CAMPGROUND",
-            "facilityType": "standard",
-            "startDate": "2026-09-04",
-            "endDate": "2026-09-07",
-            "bookingUrl": "https://www.recreation.gov/camping/campsites/93152"
-          }
-        ],
-        "suppressed": [],
-        "truncated": {
-          "requested": 33,
-          "kept": 20
-        }
-      }
-    ],
-    "newMatches": [
-      {
-        "watchId": "white-river-national-forest",
-        "campsiteId": "93152",
-        "siteLabel": "24",
-        "loop": "GORE CREEK CAMPGROUND",
-        "siteType": "tent",
-        "facilityId": 234794,
-        "facilityName": "GORE CREEK CAMPGROUND",
-        "facilityType": "standard",
-        "startDate": "2026-09-04",
-        "endDate": "2026-09-07",
-        "bookingUrl": "https://www.recreation.gov/camping/campsites/93152"
-      }
-    ],
-    "failed": [],
-    "noMatch": [
-      "arapaho-roosevelt-pawnee"
-    ]
-  },
-  {
     "startedAt": "2026-08-29T00:43:04.022Z",
     "finishedAt": "2026-08-29T00:43:16.249Z",
     "checked": 2,
@@ -1548,6 +1490,35 @@
   {
     "startedAt": "2026-09-05T01:07:38.058Z",
     "finishedAt": "2026-09-05T01:07:47.771Z",
+    "checked": 2,
+    "outcomes": [
+      {
+        "watchId": "arapaho-roosevelt-pawnee",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 28,
+          "kept": 20
+        }
+      },
+      {
+        "watchId": "white-river-national-forest",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 33,
+          "kept": 20
+        }
+      }
+    ],
+    "newMatches": [],
+    "failed": [],
+    "noMatch": [
+      "arapaho-roosevelt-pawnee",
+      "white-river-national-forest"
+    ]
+  },
+  {
+    "startedAt": "2026-09-05T05:38:55.073Z",
+    "finishedAt": "2026-09-05T05:38:57.253Z",
     "checked": 2,
     "outcomes": [
       {
