@@ -1,49 +1,5 @@
 [
   {
-    "startedAt": "2026-09-02T05:42:35.933Z",
-    "finishedAt": "2026-09-02T05:42:43.142Z",
-    "checked": 2,
-    "outcomes": [
-      {
-        "watchId": "arapaho-roosevelt-pawnee",
-        "status": "NO_MATCH",
-        "truncated": {
-          "requested": 28,
-          "kept": 20
-        }
-      },
-      {
-        "watchId": "white-river-national-forest",
-        "status": "MATCH",
-        "newMatches": [],
-        "suppressed": [
-          {
-            "watchId": "white-river-national-forest",
-            "campsiteId": "90833",
-            "siteLabel": "013",
-            "loop": "SHEPHERDS RIM CAMPGROUND",
-            "siteType": "tent",
-            "facilityId": 234795,
-            "facilityName": "SHEPHERDS RIM CAMPGROUND",
-            "facilityType": "standard",
-            "startDate": "2026-09-04",
-            "endDate": "2026-09-07",
-            "bookingUrl": "https://www.recreation.gov/camping/campsites/90833"
-          }
-        ],
-        "truncated": {
-          "requested": 33,
-          "kept": 20
-        }
-      }
-    ],
-    "newMatches": [],
-    "failed": [],
-    "noMatch": [
-      "arapaho-roosevelt-pawnee"
-    ]
-  },
-  {
     "startedAt": "2026-09-02T09:54:09.277Z",
     "finishedAt": "2026-09-02T09:54:14.398Z",
     "checked": 2,
@@ -1475,6 +1431,35 @@
   {
     "startedAt": "2026-09-08T13:32:43.644Z",
     "finishedAt": "2026-09-08T13:32:46.155Z",
+    "checked": 2,
+    "outcomes": [
+      {
+        "watchId": "arapaho-roosevelt-pawnee",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 28,
+          "kept": 20
+        }
+      },
+      {
+        "watchId": "white-river-national-forest",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 33,
+          "kept": 20
+        }
+      }
+    ],
+    "newMatches": [],
+    "failed": [],
+    "noMatch": [
+      "arapaho-roosevelt-pawnee",
+      "white-river-national-forest"
+    ]
+  },
+  {
+    "startedAt": "2026-09-08T17:22:35.337Z",
+    "finishedAt": "2026-09-08T17:22:37.540Z",
     "checked": 2,
     "outcomes": [
       {
