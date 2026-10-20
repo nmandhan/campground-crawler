@@ -1,34 +1,5 @@
 [
   {
-    "startedAt": "2026-10-12T02:15:48.296Z",
-    "finishedAt": "2026-10-12T02:15:51.184Z",
-    "checked": 2,
-    "outcomes": [
-      {
-        "watchId": "arapaho-roosevelt-pawnee",
-        "status": "NO_MATCH",
-        "truncated": {
-          "requested": 25,
-          "kept": 20
-        }
-      },
-      {
-        "watchId": "white-river-national-forest",
-        "status": "NO_MATCH",
-        "truncated": {
-          "requested": 33,
-          "kept": 20
-        }
-      }
-    ],
-    "newMatches": [],
-    "failed": [],
-    "noMatch": [
-      "arapaho-roosevelt-pawnee",
-      "white-river-national-forest"
-    ]
-  },
-  {
     "startedAt": "2026-10-12T09:14:36.923Z",
     "finishedAt": "2026-10-12T09:14:40.151Z",
     "checked": 2,
@@ -1447,6 +1418,35 @@
             "reason": "HTTP 429 from https://www.recreation.gov/api/camps/availability/campground/232224/month?start_date=2026-09-01T00%3A00%3A00.000Z"
           }
         ]
+      }
+    ],
+    "newMatches": [],
+    "failed": [],
+    "noMatch": [
+      "arapaho-roosevelt-pawnee",
+      "white-river-national-forest"
+    ]
+  },
+  {
+    "startedAt": "2026-10-20T09:59:14.878Z",
+    "finishedAt": "2026-10-20T09:59:17.897Z",
+    "checked": 2,
+    "outcomes": [
+      {
+        "watchId": "arapaho-roosevelt-pawnee",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 25,
+          "kept": 20
+        }
+      },
+      {
+        "watchId": "white-river-national-forest",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 33,
+          "kept": 20
+        }
       }
     ],
     "newMatches": [],
