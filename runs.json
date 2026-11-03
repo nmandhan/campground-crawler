@@ -1,34 +1,5 @@
 [
   {
-    "startedAt": "2026-10-24T21:17:25.931Z",
-    "finishedAt": "2026-10-24T21:17:29.234Z",
-    "checked": 2,
-    "outcomes": [
-      {
-        "watchId": "arapaho-roosevelt-pawnee",
-        "status": "NO_MATCH",
-        "truncated": {
-          "requested": 25,
-          "kept": 20
-        }
-      },
-      {
-        "watchId": "white-river-national-forest",
-        "status": "NO_MATCH",
-        "truncated": {
-          "requested": 33,
-          "kept": 20
-        }
-      }
-    ],
-    "newMatches": [],
-    "failed": [],
-    "noMatch": [
-      "arapaho-roosevelt-pawnee",
-      "white-river-national-forest"
-    ]
-  },
-  {
     "startedAt": "2026-10-24T23:18:09.607Z",
     "finishedAt": "2026-10-24T23:18:12.620Z",
     "checked": 2,
@@ -1423,6 +1394,35 @@
   {
     "startedAt": "2026-11-03T15:24:42.078Z",
     "finishedAt": "2026-11-03T15:24:46.072Z",
+    "checked": 2,
+    "outcomes": [
+      {
+        "watchId": "arapaho-roosevelt-pawnee",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 25,
+          "kept": 20
+        }
+      },
+      {
+        "watchId": "white-river-national-forest",
+        "status": "NO_MATCH",
+        "truncated": {
+          "requested": 33,
+          "kept": 20
+        }
+      }
+    ],
+    "newMatches": [],
+    "failed": [],
+    "noMatch": [
+      "arapaho-roosevelt-pawnee",
+      "white-river-national-forest"
+    ]
+  },
+  {
+    "startedAt": "2026-11-03T21:07:56.155Z",
+    "finishedAt": "2026-11-03T21:07:59.345Z",
     "checked": 2,
     "outcomes": [
       {
